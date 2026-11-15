@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, LogOut } from 'lucide-react';
+import { Building2, Check, Copy, LogOut } from 'lucide-react';
 import { useAuthSession } from '../../app/providers/authSessionContext.js';
 import { createInitialBusinessUseCase } from '../../application/use-cases/sessionUseCases.js';
 import { mapFirebaseError } from '../../data/firebase/errorMapper.js';
@@ -14,6 +14,18 @@ export function OnboardingBusinessPage() {
   const [businessName, setBusinessName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [copiedUid, setCopiedUid] = useState(false);
+
+  async function handleCopyUid() {
+    if (!authUser?.uid || !navigator?.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(authUser.uid);
+      setCopiedUid(true);
+      setTimeout(() => setCopiedUid(false), 2000);
+    } catch {
+      // Clipboard blocked on insecure contexts
+    }
+  }
 
   async function handleCreateBusiness(event) {
     event.preventDefault();
@@ -48,10 +60,14 @@ export function OnboardingBusinessPage() {
           <code className="mono">businesses/&#123;id&#125;/members</code>. Jika Anda Operator, minta Owner mendaftarkan UID Anda terlebih dahulu.
         </p>
 
-        <div className="alert">
+        <div className="alert" style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <div>
             <strong>UID Anda:</strong> <code className="mono">{authUser?.uid}</code>
           </div>
+          <button type="button" className="btn btn-sm" onClick={handleCopyUid}>
+            {copiedUid ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+            <span>{copiedUid ? 'Tersalin' : 'Salin UID'}</span>
+          </button>
         </div>
 
         <StatusAlert variant="danger" title="Gagal Membuat Bisnis" message={errorMessage} />

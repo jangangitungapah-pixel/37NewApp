@@ -1,0 +1,53 @@
+CONTEXT HANDOFF — 37MusicStudio Rebuild
+Target Phase: Phase 03 — Booking Engine & Calendar
+Repository: c:\Users\hazel\source\repos\37NewApp (branch: main)
+Baseline Prerequisites:
+- Read README.md, docs/checkpoints/phase-01-checkpoint.md, docs/checkpoints/phase-02-checkpoint.md, and relevant sections of C:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html BEFORE editing code.
+- Firebase Target Project: musicstudio37app (Database ID: "(default)", Edition: STANDARD, Spark plan only — no Cloud Functions, no Blaze, no external backend). NEVER touch the 5 existing Firebase projects on the account and NEVER run `firebase deploy` unless explicitly requested by the user.
+
+WHAT WAS COMPLETED IN PHASE 02 (AVAILABLE NOW):
+1. Master Data Domain Layer:
+   - `src/domain/enums/roles.js`: `STUDIO_STATUS`, `SERVICE_CATEGORY`, `PRICING_MODEL`, `COMMISSION_METHOD`, `COMMISSION_BASIS`, `CUSTOMER_STATUS`, `SETTING_IDS`, `BOOKING_INITIAL_STATUS_POLICY`, `SLOT_GRANULARITY_OPTIONS`, `SCHEMA_VERSIONS`.
+   - `src/domain/validators/masterDataValidators.js`: `validateOperatingHours`, `validateBusinessProfile`, `createDefaultSettingsPayloads`, `validateSettingsDoc`, `validateStudio`, `validateService`, `validateCustomer`.
+   - `src/domain/calculations/pricingCalculator.js`: `calculateServicePrice({ service, durationMinutes, discountMinor, taxPercent })` -> deterministic frozen IDR snapshot with `configVersion`.
+   - `src/domain/calculations/commissionCalculator.js`: `calculateOperatorCommission({ service, commissionSetting, grossAmountMinor, netAmountMinor })` -> resolves service override vs business default (`settled_amount` | `subtotal`).
+2. Master Data Repositories & Use Cases:
+   - `src/data/repositories/businessProfileRepository.js`, `studioRepository.js` (Operator strictly uses chunked `where('studioId', 'in', chunkIds)` on `assignedStudioIds`), `serviceRepository.js`, `customerRepository.js` (cursor pagination on `[status, nameLower, __name__]`), `teamRepository.js`.
+   - `src/application/use-cases/masterDataUseCases.js`: online checks, role/permission checks, active member state.
+3. UI & Portal Navigation:
+   - Owner Portal routes: `/owner/studios`, `/owner/services`, `/owner/customers`, `/owner/team`, `/owner/settings`, `/owner/profile`.
+   - Operator Portal routes: `/operator/studios`, `/operator/services`, `/operator/customers`, `/operator/profile`.
+4. Security Rules & Indexes (`firestore.rules` & `firestore.indexes.json`):
+   - `profile/main`, `settings/{business,schedule,pricing,commission,bookingPolicy}`, `studios/{studioId}`, `services/{serviceId}`, `customers/{customerId}`, `members/{uid}` are validated and verified in Firestore Emulator (Standard Edition).
+   - `bookings`, `bookingSlots`, `ledgerEntries`, `commissionEntries`, `galleryAssets`, `activityLogs`, `notifications` remain strictly locked `allow read, write: if false;` ready for Phase 03 unlock (`bookings`, `bookingSlots`, optionally `activityLogs` if part of booking audit).
+
+REQUIRED DELIVERABLES FOR PHASE 03 (BOOKING ENGINE & CALENDAR):
+1. Domain Booking State Machine & Deterministic Slot Keying (`src/domain/`):
+   - Define Booking Statuses (`PENDING_CONFIRMATION`, `CONFIRMED`, `IN_SESSION`, `COMPLETED`, `SETTLED`, `CANCELLED`, `NO_SHOW`, plus valid transitions — keeping Settlement/Ledger financial mutation in Phase 04 while supporting booking creation/confirm/check-in/reschedule/cancel in Phase 03).
+   - Define deterministic 15-minute slot bucket keys (`slotId = "${studioId}_${dateYmd}_${slotIndex}"` or canonical UTC/Asia-Jakarta bucket ID derived from studio operating hours & `slotGranularityMinutes`, standardized on 15-min atomic lock keys in `businesses/{businessId}/bookingSlots/{slotId}` with timezone `Asia/Jakarta`).
+   - Implement pure `slotGenerator.js` / `bookingValidator.js` enforcing:
+     - Booking date/time aligns with studio slot granularity & `operatingHours` (unless valid boundary checks pass)
+     - Buffer time handling if configured in `settings/schedule`
+     - Mandatory immutable snapshots captured at booking creation: `studioSnapshot`, `serviceSnapshot` (`configVersion`, pricing model), `customerSnapshot`, `pricingSnapshot` (from `calculateServicePrice`), `commissionRuleSnapshot`.
+     - Explicit rejection of creating new historical/past overlapping slots or negative duration.
+2. Atomic Anti-Double-Booking Transaction Repository (`src/data/repositories/bookingRepository.js`):
+   - Use `runTransaction` in Firestore to:
+     a) Check EVERY slot doc in `bookingSlots/{slotId}` within `[startAt, endAt)` does not exist or is released (`status != 'active'`) BEFORE creating both `bookings/{bookingId}` and each `bookingSlots/{slotId}` atomically in the SAME transaction!
+     b) Reschedule (`rescheduleBooking`): release old slot locks + verify & claim new slot locks atomically in one `runTransaction` (`activeBookingId == bookingId`), updating `startAt`, `endAt`, `slotIds`, and pricing/duration snapshots if changed.
+     c) Cancel / No-Show (`cancelBooking` / `markNoShow`): release all owned `bookingSlots/{slotId}` atomically in the transaction and update booking status cleanly.
+   - Respect Firestore transaction limits (max ops well under 500 writes per transaction; calculate max slots per booking cleanly, e.g., 15-min slots for up to 24h = 96 slots << 500).
+   - Strictly enforce online-only transactional booking mutations (block offline slot mutations in use cases + clear UX feedback!).
+3. Scoped Queries & Composite Indexes (`firestore.indexes.json` + `firestore.rules`):
+   - Open Firestore Security Rules ONLY for `bookings/{bookingId}` and `bookingSlots/{slotId}` (and `activityLogs/{eventId}` append-only create if booking audit is written in Phase 03 — verify whether activityLogs belongs to Phase 03 or Phase 05 and document cleanly), keeping `ledgerEntries`, `commissionEntries`, `galleryAssets`, `notifications` locked `if false`.
+   - Enforce Studio Scoping in Rules & Queries:
+     - Owner can read/create/manage bookings & slots across all studios in their business.
+     - Operator can ONLY read/query/create/manage bookings & slots for `studioId in member.assignedStudioIds` (unless role/permission forbids, check `permissions.canManageBookings` / `assignedStudioIds`), and queries in `bookingRepository.js` MUST constrain `studioId` (`==` or chunked `in`) + date window (`dateKey` / `startAt` range + bounded limit) rather than unfiltered collection scans!
+   - Validate atomic linkage invariants in Rules (`bookingSlots/{slotId}` doc ID matches deterministic format & links cleanly to `bookingId`, immutable fields, `request.time` timestamps, no hard deletes).
+4. Calendar & Booking Management UI (`src/features/bookings/`):
+   - Daily / Weekly / Studio Room Calendar Grid (mobile-responsive) displaying studio availability in `Asia/Jakarta`, real-time conflict feedback, quick slot selection, Create Booking drawer/modal (choosing assigned Studio -> active Service -> Duration -> Customer picker/inline create -> live `calculateServicePrice` preview -> `Confirm`), Booking Detail drawer (Confirm/Check-in/Reschedule/Cancel with reason), and filter by Studio & Date range.
+   - Integrate into both Owner Portal (`/owner/bookings`, `/owner/calendar`) and Operator Portal (`/operator/bookings`, `/operator/calendar` strictly scoped to `assignedStudioIds`), ensuring all `onSnapshot` calendar listeners register with `SubscriptionRegistry` and clean up on date navigation, route change, or logout!
+5. Verification & Gate Requirements Before Stopping at End of Phase 03:
+   - Unit tests: booking state transitions, slot key calculation across timezones/boundaries, conflict detection, immutable pricing snapshot binding, offline guard rejection.
+   - Firestore Emulator Rules tests (`npm run test:rules`): concurrent/conflicting `bookingSlots` creation rejected cleanly in transaction/rules, Operator cross-studio booking read/write denied, revoked studio assignment blocks booking read/write, tamper/price manipulation or hard delete denied, `ledgerEntries` & Phase 04+ collections still strictly locked.
+   - `npm run lint`, `npm run test:unit`, `npm run test:rules`, `npm run build` all pass cleanly.
+   - Timestamped log saved in `logs/`, git commit on `main`, `README.md` updated, `docs/checkpoints/phase-03-checkpoint.md` and `docs/handoffs/phase-04-handoff-prompt.txt` written, and STOP before starting Phase 04.

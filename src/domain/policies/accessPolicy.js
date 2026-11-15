@@ -96,3 +96,49 @@ export function hasMemberPermission(member, permissionKey) {
   }
   return Boolean(member.permissions && member.permissions[permissionKey] === true);
 }
+
+/**
+ * Evaluates whether a member can manage studio/service/settings/team master data.
+ * Restricted strictly to active Owners by default policy.
+ *
+ * @param {{ role?: string, status?: string } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canManageMasterData(member) {
+  return isOwnerMember(member);
+}
+
+/**
+ * Evaluates whether a member can create/update active customer operational profiles.
+ * @param {{ role?: string, status?: string, permissions?: Record<string, boolean> } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canManageCustomers(member) {
+  return isOwnerMember(member) || hasMemberPermission(member, 'canManageCustomers');
+}
+
+/**
+ * Evaluates whether a member can archive customers (historical preservation requires Owner).
+ * @param {{ role?: string, status?: string } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canArchiveCustomers(member) {
+  return isOwnerMember(member);
+}
+
+/**
+ * Filters a list of studios according to the member's role and assignedStudioIds.
+ * @template {{ studioId?: string }} T
+ * @param {{ role?: string, status?: string, assignedStudioIds?: string[] } | null | undefined} member
+ * @param {T[]} studios
+ * @returns {T[]}
+ */
+export function filterAccessibleStudios(member, studios) {
+  if (!Array.isArray(studios) || !isActiveMember(member)) {
+    return [];
+  }
+  if (member.role === ROLES.OWNER) {
+    return studios;
+  }
+  return studios.filter((studio) => canAccessStudio(member, studio?.studioId || ''));
+}

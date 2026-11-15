@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // =========================================================================
-    // 37MusicStudio Firestore Security Rules — Phase 01 (Deny-by-Default)
+    // 37MusicStudio Firestore Security Rules — Phase 02 (Master Data & Auth)
     // =========================================================================
 
     function isSignedIn() {
@@ -38,12 +38,36 @@ service cloud.firestore {
         && currentMember(businessId).role == 'owner';
     }
 
+    function canAccessCustomers(businessId) {
+      return isOwner(businessId)
+        || (
+          hasActiveMembership(businessId)
+          && currentMember(businessId).get(['permissions', 'canManageCustomers'], false) == true
+        );
+    }
+
     function isValidRole(role) {
       return role in ['owner', 'operator'];
     }
 
     function isValidMemberStatus(status) {
       return status in ['active', 'invited', 'suspended', 'revoked'];
+    }
+
+    function isValidNullableString(data, key, maxLen) {
+      return !(key in data)
+        || data[key] == null
+        || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isValidOperatingHoursMap(hours) {
+      return hours is map
+        && hours.keys().hasOnly(['openTime', 'closeTime'])
+        && hours.openTime is string
+        && hours.openTime.size() == 5
+        && hours.closeTime is string
+        && hours.closeTime.size() == 5
+        && hours.openTime < hours.closeTime;
     }
 
     function isValidUserProfileData(data) {
@@ -62,8 +86,8 @@ service cloud.firestore {
         && data.displayName.size() <= 120
         && data.email is string
         && data.email.size() <= 254
-        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 512))
-        && (!('defaultBusinessId' in data) || data.defaultBusinessId == null || (data.defaultBusinessId is string && data.defaultBusinessId.size() <= 128))
+        && isValidNullableString(data, 'photoURL', 512)
+        && isValidNullableString(data, 'defaultBusinessId', 128)
         && data.schemaVersion is int
         && data.schemaVersion >= 1;
     }
@@ -126,6 +150,246 @@ service cloud.firestore {
         && data.schemaVersion >= 1;
     }
 
+    function isValidBusinessProfileData(data, businessId) {
+      return data.keys().hasOnly([
+          'businessId',
+          'displayName',
+          'legalName',
+          'phone',
+          'email',
+          'address',
+          'timezone',
+          'currency',
+          'status',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy'
+        ])
+        && data.businessId == businessId
+        && data.displayName is string
+        && data.displayName.size() >= 2
+        && data.displayName.size() <= 120
+        && isValidNullableString(data, 'legalName', 160)
+        && isValidNullableString(data, 'phone', 32)
+        && isValidNullableString(data, 'email', 254)
+        && isValidNullableString(data, 'address', 300)
+        && data.timezone is string
+        && data.timezone.size() >= 2
+        && data.currency is string
+        && data.currency.size() >= 3
+        && data.status in ['active', 'inactive']
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    function isValidSettingBase(data, businessId, settingId) {
+      return data.businessId == businessId
+        && data.settingId == settingId
+        && data.configVersion is int
+        && data.configVersion >= 1
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    function isValidSettingData(data, businessId, settingId) {
+      return isValidSettingBase(data, businessId, settingId)
+        && (
+          (
+            settingId == 'business'
+            && data.keys().hasOnly([
+              'settingId', 'businessId', 'defaultTimezone', 'currency',
+              'allowMultiStudio', 'configVersion', 'schemaVersion',
+              'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+            ])
+            && data.defaultTimezone is string
+            && data.defaultTimezone.size() >= 2
+            && data.currency is string
+            && data.currency.size() >= 3
+            && data.allowMultiStudio is bool
+          )
+          || (
+            settingId == 'schedule'
+            && data.keys().hasOnly([
+              'settingId', 'businessId', 'operatingHours', 'slotGranularityMinutes',
+              'bufferMinutes', 'configVersion', 'schemaVersion',
+              'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+            ])
+            && isValidOperatingHoursMap(data.operatingHours)
+            && data.slotGranularityMinutes in [15, 30, 60]
+            && data.bufferMinutes is int
+            && data.bufferMinutes >= 0
+            && data.bufferMinutes <= 120
+          )
+          || (
+            settingId == 'pricing'
+            && data.keys().hasOnly([
+              'settingId', 'businessId', 'currency', 'taxPercent',
+              'allowOperatorDiscount', 'roundingUnitMinor', 'configVersion', 'schemaVersion',
+              'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+            ])
+            && data.currency is string
+            && data.taxPercent is int
+            && data.taxPercent >= 0
+            && data.taxPercent <= 100
+            && data.allowOperatorDiscount is bool
+            && data.roundingUnitMinor is int
+            && data.roundingUnitMinor >= 1
+          )
+          || (
+            settingId == 'commission'
+            && data.keys().hasOnly([
+              'settingId', 'businessId', 'defaultMethod', 'defaultRatePercent',
+              'defaultFixedAmountMinor', 'basis', 'applyOnStatus', 'configVersion',
+              'schemaVersion', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+            ])
+            && data.defaultMethod in ['none', 'percentage', 'fixed_per_booking']
+            && data.defaultRatePercent is int
+            && data.defaultRatePercent >= 0
+            && data.defaultRatePercent <= 100
+            && data.defaultFixedAmountMinor is int
+            && data.defaultFixedAmountMinor >= 0
+            && data.basis in ['subtotal', 'settled_amount']
+            && data.applyOnStatus == 'settled'
+          )
+          || (
+            settingId == 'bookingPolicy'
+            && data.keys().hasOnly([
+              'settingId', 'businessId', 'defaultInitialStatus', 'requireCustomerPhone',
+              'allowSameDayReschedule', 'cancellationNoticeMinutes', 'configVersion',
+              'schemaVersion', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+            ])
+            && data.defaultInitialStatus in ['CONFIRMED', 'PENDING_CONFIRMATION']
+            && data.requireCustomerPhone is bool
+            && data.allowSameDayReschedule is bool
+            && data.cancellationNoticeMinutes is int
+            && data.cancellationNoticeMinutes >= 0
+            && data.cancellationNoticeMinutes <= 10080
+          )
+        );
+    }
+
+    function isValidStudioData(data, businessId, studioId) {
+      return data.keys().hasOnly([
+          'studioId',
+          'businessId',
+          'name',
+          'code',
+          'status',
+          'timezone',
+          'operatingHours',
+          'slotGranularityMinutes',
+          'description',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy'
+        ])
+        && data.studioId == studioId
+        && data.businessId == businessId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 80
+        && data.code is string
+        && data.code.size() >= 2
+        && data.code.size() <= 20
+        && data.status in ['active', 'inactive']
+        && data.timezone is string
+        && data.timezone.size() >= 2
+        && isValidOperatingHoursMap(data.operatingHours)
+        && data.slotGranularityMinutes in [15, 30, 60]
+        && isValidNullableString(data, 'description', 300)
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    function isValidServiceData(data, businessId, serviceId) {
+      return data.keys().hasOnly([
+          'serviceId',
+          'businessId',
+          'name',
+          'category',
+          'pricingModel',
+          'durationOptions',
+          'basePriceMinor',
+          'durationPricesMinor',
+          'commissionMethod',
+          'commissionValue',
+          'applicableStudioIds',
+          'active',
+          'description',
+          'configVersion',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy'
+        ])
+        && data.serviceId == serviceId
+        && data.businessId == businessId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 80
+        && data.category in ['rehearsal', 'recording', 'mixing', 'mastering']
+        && data.pricingModel in ['hourly', 'package', 'fixed_session']
+        && data.durationOptions is list
+        && data.durationOptions.size() >= 1
+        && data.durationOptions.size() <= 12
+        && data.basePriceMinor is int
+        && data.basePriceMinor >= 0
+        && data.durationPricesMinor is map
+        && data.commissionMethod in ['inherit', 'none', 'percentage', 'fixed_per_booking']
+        && data.commissionValue is int
+        && data.commissionValue >= 0
+        && (data.commissionMethod != 'percentage' || data.commissionValue <= 100)
+        && data.applicableStudioIds is list
+        && data.applicableStudioIds.size() <= 50
+        && data.active is bool
+        && isValidNullableString(data, 'description', 300)
+        && data.configVersion is int
+        && data.configVersion >= 1
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    function isValidCustomerData(data, businessId, customerId) {
+      return data.keys().hasOnly([
+          'customerId',
+          'businessId',
+          'name',
+          'nameLower',
+          'phone',
+          'email',
+          'bandOrActName',
+          'notes',
+          'status',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy'
+        ])
+        && data.customerId == customerId
+        && data.businessId == businessId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 120
+        && data.nameLower is string
+        && data.nameLower.size() >= 2
+        && data.nameLower.size() <= 120
+        && data.phone is string
+        && data.phone.size() >= 6
+        && data.phone.size() <= 24
+        && isValidNullableString(data, 'email', 254)
+        && isValidNullableString(data, 'bandOrActName', 120)
+        && isValidNullableString(data, 'notes', 500)
+        && data.status in ['active', 'archived']
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
     // -------------------------------------------------------------------------
     // Global user profile (must NEVER contain role/permission/business access)
     // -------------------------------------------------------------------------
@@ -152,14 +416,13 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Tenant-scoped business root & membership
+    // Tenant-scoped business root & master data (Phase 01 + Phase 02)
     // -------------------------------------------------------------------------
     match /businesses/{businessId} {
       allow get: if hasActiveMembership(businessId);
       allow list: if false;
 
-      // Initial business creation (only when businessId does not yet exist and
-      // creator atomically registers themselves as active owner in the same batch)
+      // Initial business creation (atomic with founder active owner doc)
       allow create: if isSignedIn()
         && !exists(businessPath(businessId))
         && request.resource.data.ownerUid == request.auth.uid
@@ -183,13 +446,9 @@ service cloud.firestore {
       allow delete: if false;
 
       match /members/{memberUid} {
-        // Owner can read all members in their business; User can read ONLY own member doc (or check non-existence safely)
         allow get: if isOwner(businessId) || (isSelf(memberUid) && (resource == null || resource.data.uid == request.auth.uid));
         allow list: if isOwner(businessId);
 
-        // Create allowed for:
-        // 1) Active Owner adding a team member
-        // 2) Atomic initial business bootstrap where founder registers self as active owner
         allow create: if isValidMemberData(request.resource.data, memberUid)
           && request.resource.data.businessId == businessId
           && request.resource.data.createdBy == request.auth.uid
@@ -208,8 +467,6 @@ service cloud.firestore {
             )
           );
 
-        // Only active Owner may update membership, role, status, or assignedStudioIds.
-        // Self-elevation or self-status tampering by Operator is strictly blocked.
         allow update: if isOwner(businessId)
           && isValidMemberData(request.resource.data, memberUid)
           && request.resource.data.uid == resource.data.uid
@@ -218,20 +475,158 @@ service cloud.firestore {
           && request.resource.data.createdBy == resource.data.createdBy
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
-          // Guard against Owner accidentally revoking or demoting their own active owner access
           && (!isSelf(memberUid) || (request.resource.data.role == 'owner' && request.resource.data.status == 'active'));
 
         allow delete: if false;
       }
 
       // -----------------------------------------------------------------------
-      // Phase 02+ Subcollections remain explicitly denied by default until
+      // Phase 02: Business Profile (`profile/main`)
+      // -----------------------------------------------------------------------
+      match /profile/{docId} {
+        allow get: if docId == 'main' && hasActiveMembership(businessId);
+        allow list: if false;
+
+        allow create: if isOwner(businessId)
+          && docId == 'main'
+          && isValidBusinessProfileData(request.resource.data, businessId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && docId == 'main'
+          && isValidBusinessProfileData(request.resource.data, businessId)
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Settings (`business | schedule | pricing | commission | bookingPolicy`)
+      // -----------------------------------------------------------------------
+      match /settings/{settingId} {
+        allow get, list: if hasActiveMembership(businessId);
+
+        allow create: if isOwner(businessId)
+          && settingId in ['business', 'schedule', 'pricing', 'commission', 'bookingPolicy']
+          && isValidSettingData(request.resource.data, businessId, settingId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && settingId in ['business', 'schedule', 'pricing', 'commission', 'bookingPolicy']
+          && isValidSettingData(request.resource.data, businessId, settingId)
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.settingId == resource.data.settingId
+          && request.resource.data.configVersion >= resource.data.configVersion
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Studios / Rooms (Owner full; Operator read assigned only)
+      // -----------------------------------------------------------------------
+      match /studios/{studioId} {
+        allow get: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && studioId in currentMember(businessId).assignedStudioIds
+            && (resource == null || resource.data.studioId == studioId)
+          );
+        allow list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if isOwner(businessId)
+          && isValidStudioData(request.resource.data, businessId, studioId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && isValidStudioData(request.resource.data, businessId, studioId)
+          && request.resource.data.studioId == resource.data.studioId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Services & Versioned Pricing Config
+      // -----------------------------------------------------------------------
+      match /services/{serviceId} {
+        allow get, list: if hasActiveMembership(businessId);
+
+        allow create: if isOwner(businessId)
+          && isValidServiceData(request.resource.data, businessId, serviceId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && isValidServiceData(request.resource.data, businessId, serviceId)
+          && request.resource.data.serviceId == resource.data.serviceId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.configVersion >= resource.data.configVersion
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Customers (Owner full CRUD sans delete; Operator active operational access)
+      // -----------------------------------------------------------------------
+      match /customers/{customerId} {
+        allow get, list: if canAccessCustomers(businessId);
+
+        allow create: if canAccessCustomers(businessId)
+          && isValidCustomerData(request.resource.data, businessId, customerId)
+          && (isOwner(businessId) || request.resource.data.status == 'active')
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if canAccessCustomers(businessId)
+          && isValidCustomerData(request.resource.data, businessId, customerId)
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.businessId == resource.data.businessId
+          && (isOwner(businessId) || request.resource.data.status == resource.data.status)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 03+ Subcollections remain explicitly denied by default until
       // their schema, invariants, and phase tests are implemented.
       // -----------------------------------------------------------------------
-      match /profile/{docId} { allow read, write: if false; }
-      match /studios/{studioId} { allow read, write: if false; }
-      match /services/{serviceId} { allow read, write: if false; }
-      match /customers/{customerId} { allow read, write: if false; }
       match /bookings/{bookingId} { allow read, write: if false; }
       match /bookingSlots/{slotId} { allow read, write: if false; }
       match /ledgerEntries/{entryId} { allow read, write: if false; }
@@ -239,7 +634,6 @@ service cloud.firestore {
       match /galleryAssets/{assetId} { allow read, write: if false; }
       match /activityLogs/{eventId} { allow read, write: if false; }
       match /notifications/{notificationId} { allow read, write: if false; }
-      match /settings/{settingId} { allow read, write: if false; }
     }
 
     // Default deny fallback for every other path

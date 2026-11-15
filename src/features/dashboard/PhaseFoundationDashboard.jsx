@@ -1,11 +1,19 @@
-import { CheckCircle2, Clock, Database, Lock, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Database,
+  Lock,
+  ShieldCheck,
+} from 'lucide-react';
 import { useAuthSession } from '../../app/providers/authSessionContext.js';
 import { ROLES } from '../../domain/enums/roles.js';
 
 const ROADMAP_PHASES = [
   { phase: '01', name: 'Foundation, Auth & Firestore Security Rules', state: 'active' },
-  { phase: '02', name: 'Business Master Data (Studios, Services, Customers, Team)', state: 'next' },
-  { phase: '03', name: 'Booking Engine & Deterministic Slot Calendar', state: 'planned' },
+  { phase: '02', name: 'Business Master Data (Studios, Services, Customers, Team)', state: 'active' },
+  { phase: '03', name: 'Booking Engine & Deterministic Slot Calendar', state: 'next' },
   { phase: '04', name: 'Session, Settlement, Immutable Ledger & Commission', state: 'planned' },
   { phase: '05', name: 'Portal Collaboration, Activity Log & Notifications', state: 'planned' },
   { phase: '06', name: 'Gallery & Cloudinary Restricted Unsigned Upload', state: 'planned' },
@@ -17,13 +25,27 @@ export function PhaseFoundationDashboard({ portalRole }) {
   const { authUser, member, business, appConfig, activeListenerCount } = useAuthSession();
   const isOwner = portalRole === ROLES.OWNER;
 
+  const quickLinks = isOwner
+    ? [
+        { to: '/owner/studios', label: 'Studios & Rooms' },
+        { to: '/owner/services', label: 'Services & Pricing' },
+        { to: '/owner/customers', label: 'Customers' },
+        { to: '/owner/team', label: 'Team & Access' },
+        { to: '/owner/settings', label: 'Settings & Policies' },
+      ]
+    : [
+        { to: '/operator/studios', label: 'Studio Ditugaskan' },
+        { to: '/operator/services', label: 'Layanan & Tarif' },
+        { to: '/operator/customers', label: 'Customers' },
+      ];
+
   return (
     <div style={{ display: 'grid', gap: '20px' }}>
-      <section className="panel" style={{ display: 'grid', gap: '10px' }}>
+      <section className="panel" style={{ display: 'grid', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <span className="badge badge-success">
             <ShieldCheck size={14} aria-hidden="true" />
-            <span>Phase 01 Foundation Active</span>
+            <span>Phase 02 Master Data Active</span>
           </span>
           <span className="badge badge-info">
             <Database size={14} aria-hidden="true" />
@@ -33,13 +55,21 @@ export function PhaseFoundationDashboard({ portalRole }) {
           </span>
         </div>
         <h1 style={{ margin: 0, fontSize: '26px', lineHeight: 1.2 }}>
-          {isOwner ? 'Owner Portal — Fondasi & Keamanan Sesi' : 'Operator Portal — Ruang Kerja Ter-Scope'}
+          {isOwner ? 'Owner Portal — Master Data & Kendali Bisnis' : 'Operator Portal — Ruang Kerja Ter-Scope'}
         </h1>
         <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '14px' }}>
           {isOwner
-            ? 'Akses bisnis penuh divalidasi oleh Firestore Security Rules. Modul operasional master data, kalender booking, settlement, dan galeri dibuka bertahap pada Phase 02–07.'
-            : 'Portal Operator dibatasi sesuai assignedStudioIds dan permission flags dari dokumen membership Firestore Anda.'}
+            ? 'Kelola master data bisnis (studio, layanan, tarif IDR, kebijakan komisi, customer, dan akses tim). Modul booking & settlement dibuka bertahap pada Phase 03–04.'
+            : 'Portal Operator menampilkan studio yang ditugaskan (`assignedStudioIds`), katalog layanan/tarif aktif, dan operasional customer sesuai izin.'}
         </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', paddingTop: '4px' }}>
+          {quickLinks.map((item) => (
+            <Link key={item.to} to={item.to} className="btn btn-sm">
+              <span>{item.label}</span>
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="grid-3">
@@ -83,7 +113,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
           <h2 style={{ margin: 0, fontSize: '18px' }}>Status Implementasi Modul (Phase Gate)</h2>
           <span className="badge">
             <Lock size={13} aria-hidden="true" />
-            <span>Koleksi Phase 02+ masih terkunci di Rules</span>
+            <span>Koleksi Phase 03+ masih terkunci di Rules</span>
           </span>
         </div>
 

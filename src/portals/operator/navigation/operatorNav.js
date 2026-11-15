@@ -1,6 +1,9 @@
-import { LayoutDashboard, Shield } from 'lucide-react';
+import { DoorOpen, Layers, LayoutDashboard, Shield, Users } from 'lucide-react';
 
 export const OPERATOR_NAV_ITEMS = [
-  { to: '/operator', label: 'Foundation Overview', icon: LayoutDashboard, end: true },
-  { to: '/operator/profile', label: 'Keamanan & Sesi', icon: Shield, end: false },
+  { to: '/operator', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/operator/studios', label: 'Studio Ditugaskan', icon: DoorOpen, end: false },
+  { to: '/operator/services', label: 'Layanan & Tarif', icon: Layers, end: false },
+  { to: '/operator/customers', label: 'Customers', icon: Users, end: false },
+  { to: '/operator/profile', label: 'Profil & Akses', icon: Shield, end: false },
 ];
