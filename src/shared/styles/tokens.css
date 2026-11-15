@@ -1,0 +1,50 @@
+:root {
+  /* Acoustic Obsidian & Warm Studio Palette */
+  --bg-canvas: #090c12;
+  --bg-elevated: #111622;
+  --bg-surface: #171e2e;
+  --bg-surface-hover: #1f283d;
+  --bg-input: #0d121c;
+
+  --border-subtle: rgba(210, 224, 246, 0.12);
+  --border-strong: rgba(210, 224, 246, 0.24);
+  --border-focus: #f5b864;
+
+  --text-primary: #f2f5fb;
+  --text-secondary: #b6c2d6;
+  --text-muted: #7f8fa8;
+  --text-inverse: #0a0f18;
+
+  /* Brand & Semantic Accents */
+  --accent-brass: #f5b864;
+  --accent-brass-soft: rgba(245, 184, 100, 0.14);
+  --accent-mint: #4cd4a9;
+  --accent-mint-soft: rgba(76, 212, 169, 0.14);
+  --accent-sky: #70b0ff;
+  --accent-sky-soft: rgba(112, 176, 255, 0.14);
+
+  --status-success: #5be0b5;
+  --status-success-bg: rgba(76, 212, 169, 0.14);
+  --status-warning: #ffd278;
+  --status-warning-bg: rgba(245, 184, 100, 0.15);
+  --status-danger: #ff8c8c;
+  --status-danger-bg: rgba(255, 118, 118, 0.15);
+
+  /* Typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Spacing, Radii, Elevation & Z-Index Scale */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.28);
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.55);
+
+  --z-sticky: 20;
+  --z-drawer: 40;
+  --z-modal: 60;
+  --z-toast: 80;
+}

@@ -1,0 +1,34 @@
+Lanjutkan pembangunan 37MusicStudio pada workspace `c:\Users\hazel\source\repos\37NewApp` ke **Phase 02: Business Master Data**.
+
+WAJIB BACA TERLEBIH DAHULU:
+1. `c:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html` (source of truth requirement)
+2. `docs/adr/0001-architecture-lock.md`
+3. `docs/adr/0002-firestore-enterprise-named-default.md`
+4. `docs/checkpoints/phase-01-checkpoint.md`
+5. `firestore.rules`, `firestore.indexes.json`, `firebase.json`
+
+BATASAN KERAS YANG HARUS DIPERTAHANKAN:
+- Stack wajib: React + Vite + JavaScript (JSX), Firebase Auth, Cloud Firestore (project `musicstudio37app`, database ID `"default"`, Edition `ENTERPRISE`), Firebase Hosting, Spark plan only.
+- DILARANG menambah Cloud Functions, Firebase Storage, Blaze/paid backend, atau menyentuh 5 project Firebase eksisting.
+- Kerjakan HANYA Phase 02 dalam sesi ini; jangan memulai Booking Engine (Phase 03) atau Settlement/Finance (Phase 04).
+
+CAKUPAN PHASE 02 (BUSINESS MASTER DATA):
+1. **Business Profile & Settings (`profile/main`, `settings/{business,schedule,pricing,commission,bookingPolicy}`)**:
+   - Jam operasional default `10:00–22:00`, timezone `Asia/Jakarta`, `currency: 'IDR'`, `slotGranularityMinutes` default `15`.
+   - Owner-only write; Operator read ter-scope data operasional yang dibutuhkan.
+2. **Studios / Rooms (`businesses/{businessId}/studios/{studioId}`)**:
+   - CRUD lengkap untuk Owner (name, code, status active/inactive, timezone, operatingHours, slotGranularityMinutes).
+   - Operator hanya boleh membaca studio dalam `assignedStudioIds` miliknya.
+3. **Services, Pricing & Commission Policies (`businesses/{businessId}/services/{serviceId}` & settings)**:
+   - Layanan awal: `Rehearsal`, `Recording`, `Mixing`, `Mastering`, dengan `durationOptions`, `pricingModel` (durasi/paket/nilai khusus), `active`, versi config (`configVersion`), dan nilai uang integer rupiah (tanpa floating-point).
+   - Aturan komisi (persentase / nominal tetap / kebijakan per service atau operator) dikelola oleh Owner.
+4. **Customers (`businesses/{businessId}/customers/{customerId}`)**:
+   - Database customer ter-scope bisnis; Owner full CRUD; Operator akses operasional sesuai permission (tanpa menghapus data historis).
+5. **Team Membership & Assignment (`businesses/{businessId}/members/{uid}`)**:
+   - Owner dapat mengundang/mendaftarkan member Operator/Owner (catatan Spark-only: tanpa Cloud Functions Admin SDK, penyiapan akun Auth baru/penautan UID oleh Owner harus didokumentasikan secara jelas dan jujur), mengatur `role`, `status`, `assignedStudioIds`, dan `permissions`.
+6. **Firestore Rules & Enterprise Indexes**:
+   - Buka aturan tervalidasi (allowlist, tipe data, integer money check, role/studio scope check) di `firestore.rules` HANYA untuk koleksi Phase 02; biarkan Phase 03+ (`bookings`, `bookingSlots`, `ledgerEntries`, `commissionEntries`, `galleryAssets`) tetap deny-by-default.
+   - Tambahkan index eksplisit di `firestore.indexes.json` untuk setiap query baru (wajib karena Firestore Enterprise Edition tidak membuat single-field index otomatis).
+7. **Verifikasi & Checkpoint**:
+   - Uji unit test domain validators/pricing/commission calculations + Emulator Rules test untuk seluruh koleksi Phase 02 + `npm run lint` + `npm run build` dengan log `.txt` bertimestamp di `logs/`.
+   - Buat `docs/checkpoints/phase-02-checkpoint.md` dan `docs/handoffs/phase-03-handoff-prompt.txt`, lalu STOP sebelum Phase 03.

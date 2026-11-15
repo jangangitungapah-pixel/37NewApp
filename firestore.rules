@@ -1,0 +1,250 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // =========================================================================
+    // 37MusicStudio Firestore Security Rules — Phase 01 (Deny-by-Default)
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function businessPath(businessId) {
+      return /databases/$(database)/documents/businesses/$(businessId);
+    }
+
+    function memberPath(businessId, uid) {
+      return /databases/$(database)/documents/businesses/$(businessId)/members/$(uid);
+    }
+
+    function hasActiveMembership(businessId) {
+      return isSignedIn()
+        && exists(memberPath(businessId, request.auth.uid))
+        && get(memberPath(businessId, request.auth.uid)).data.status == 'active'
+        && get(memberPath(businessId, request.auth.uid)).data.uid == request.auth.uid;
+    }
+
+    function currentMember(businessId) {
+      return get(memberPath(businessId, request.auth.uid)).data;
+    }
+
+    function isOwner(businessId) {
+      return hasActiveMembership(businessId)
+        && currentMember(businessId).role == 'owner';
+    }
+
+    function isValidRole(role) {
+      return role in ['owner', 'operator'];
+    }
+
+    function isValidMemberStatus(status) {
+      return status in ['active', 'invited', 'suspended', 'revoked'];
+    }
+
+    function isValidUserProfileData(data) {
+      return data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'email',
+          'photoURL',
+          'defaultBusinessId',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() <= 120
+        && data.email is string
+        && data.email.size() <= 254
+        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 512))
+        && (!('defaultBusinessId' in data) || data.defaultBusinessId == null || (data.defaultBusinessId is string && data.defaultBusinessId.size() <= 128))
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    function isValidBusinessData(data, businessId) {
+      return data.keys().hasOnly([
+          'businessId',
+          'name',
+          'slug',
+          'ownerUid',
+          'timezone',
+          'currency',
+          'status',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy'
+        ])
+        && data.businessId == businessId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 120
+        && data.ownerUid is string
+        && data.timezone is string
+        && data.currency is string
+        && data.status in ['active', 'inactive']
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    function isValidMemberData(data, memberUid) {
+      return data.keys().hasOnly([
+          'uid',
+          'businessId',
+          'email',
+          'displayName',
+          'role',
+          'status',
+          'assignedStudioIds',
+          'permissions',
+          'schemaVersion',
+          'createdAt',
+          'updatedAt',
+          'createdBy',
+          'updatedBy'
+        ])
+        && data.uid == memberUid
+        && data.businessId is string
+        && data.businessId.size() >= 1
+        && data.displayName is string
+        && data.displayName.size() <= 120
+        && (!('email' in data) || (data.email is string && data.email.size() <= 254))
+        && isValidRole(data.role)
+        && isValidMemberStatus(data.status)
+        && data.assignedStudioIds is list
+        && data.assignedStudioIds.size() <= 50
+        && (!('permissions' in data) || data.permissions is map)
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global user profile (must NEVER contain role/permission/business access)
+    // -------------------------------------------------------------------------
+    match /users/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create: if isSelf(uid)
+        && isValidUserProfileData(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isSelf(uid)
+        && isValidUserProfileData(request.resource.data)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection group query for discovering own business memberships
+    // -------------------------------------------------------------------------
+    match /{path=**}/members/{memberUid} {
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // -------------------------------------------------------------------------
+    // Tenant-scoped business root & membership
+    // -------------------------------------------------------------------------
+    match /businesses/{businessId} {
+      allow get: if hasActiveMembership(businessId);
+      allow list: if false;
+
+      // Initial business creation (only when businessId does not yet exist and
+      // creator atomically registers themselves as active owner in the same batch)
+      allow create: if isSignedIn()
+        && !exists(businessPath(businessId))
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && isValidBusinessData(request.resource.data, businessId)
+        && getAfter(memberPath(businessId, request.auth.uid)).data.uid == request.auth.uid
+        && getAfter(memberPath(businessId, request.auth.uid)).data.role == 'owner'
+        && getAfter(memberPath(businessId, request.auth.uid)).data.status == 'active';
+
+      allow update: if isOwner(businessId)
+        && isValidBusinessData(request.resource.data, businessId)
+        && request.resource.data.businessId == resource.data.businessId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        // Owner can read all members in their business; User can read ONLY own member doc (or check non-existence safely)
+        allow get: if isOwner(businessId) || (isSelf(memberUid) && (resource == null || resource.data.uid == request.auth.uid));
+        allow list: if isOwner(businessId);
+
+        // Create allowed for:
+        // 1) Active Owner adding a team member
+        // 2) Atomic initial business bootstrap where founder registers self as active owner
+        allow create: if isValidMemberData(request.resource.data, memberUid)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (
+            isOwner(businessId)
+            || (
+              isSelf(memberUid)
+              && !exists(businessPath(businessId))
+              && request.resource.data.role == 'owner'
+              && request.resource.data.status == 'active'
+              && getAfter(businessPath(businessId)).data.ownerUid == request.auth.uid
+              && getAfter(businessPath(businessId)).data.businessId == businessId
+            )
+          );
+
+        // Only active Owner may update membership, role, status, or assignedStudioIds.
+        // Self-elevation or self-status tampering by Operator is strictly blocked.
+        allow update: if isOwner(businessId)
+          && isValidMemberData(request.resource.data, memberUid)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          // Guard against Owner accidentally revoking or demoting their own active owner access
+          && (!isSelf(memberUid) || (request.resource.data.role == 'owner' && request.resource.data.status == 'active'));
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02+ Subcollections remain explicitly denied by default until
+      // their schema, invariants, and phase tests are implemented.
+      // -----------------------------------------------------------------------
+      match /profile/{docId} { allow read, write: if false; }
+      match /studios/{studioId} { allow read, write: if false; }
+      match /services/{serviceId} { allow read, write: if false; }
+      match /customers/{customerId} { allow read, write: if false; }
+      match /bookings/{bookingId} { allow read, write: if false; }
+      match /bookingSlots/{slotId} { allow read, write: if false; }
+      match /ledgerEntries/{entryId} { allow read, write: if false; }
+      match /commissionEntries/{entryId} { allow read, write: if false; }
+      match /galleryAssets/{assetId} { allow read, write: if false; }
+      match /activityLogs/{eventId} { allow read, write: if false; }
+      match /notifications/{notificationId} { allow read, write: if false; }
+      match /settings/{settingId} { allow read, write: if false; }
+    }
+
+    // Default deny fallback for every other path
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

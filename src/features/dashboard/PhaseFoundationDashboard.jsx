@@ -1,0 +1,128 @@
+import { CheckCircle2, Clock, Database, Lock, ShieldCheck } from 'lucide-react';
+import { useAuthSession } from '../../app/providers/authSessionContext.js';
+import { ROLES } from '../../domain/enums/roles.js';
+
+const ROADMAP_PHASES = [
+  { phase: '01', name: 'Foundation, Auth & Firestore Security Rules', state: 'active' },
+  { phase: '02', name: 'Business Master Data (Studios, Services, Customers, Team)', state: 'next' },
+  { phase: '03', name: 'Booking Engine & Deterministic Slot Calendar', state: 'planned' },
+  { phase: '04', name: 'Session, Settlement, Immutable Ledger & Commission', state: 'planned' },
+  { phase: '05', name: 'Portal Collaboration, Activity Log & Notifications', state: 'planned' },
+  { phase: '06', name: 'Gallery & Cloudinary Restricted Unsigned Upload', state: 'planned' },
+  { phase: '07', name: 'Dashboard Analytics & Spark-Safe Reports', state: 'planned' },
+  { phase: '08', name: 'Hardening, Accessibility & Production Readiness', state: 'planned' },
+];
+
+export function PhaseFoundationDashboard({ portalRole }) {
+  const { authUser, member, business, appConfig, activeListenerCount } = useAuthSession();
+  const isOwner = portalRole === ROLES.OWNER;
+
+  return (
+    <div style={{ display: 'grid', gap: '20px' }}>
+      <section className="panel" style={{ display: 'grid', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+          <span className="badge badge-success">
+            <ShieldCheck size={14} aria-hidden="true" />
+            <span>Phase 01 Foundation Active</span>
+          </span>
+          <span className="badge badge-info">
+            <Database size={14} aria-hidden="true" />
+            <span>
+              Firestore: {appConfig.firebase.projectId} / {appConfig.firebase.databaseId}
+            </span>
+          </span>
+        </div>
+        <h1 style={{ margin: 0, fontSize: '26px', lineHeight: 1.2 }}>
+          {isOwner ? 'Owner Portal — Fondasi & Keamanan Sesi' : 'Operator Portal — Ruang Kerja Ter-Scope'}
+        </h1>
+        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '14px' }}>
+          {isOwner
+            ? 'Akses bisnis penuh divalidasi oleh Firestore Security Rules. Modul operasional master data, kalender booking, settlement, dan galeri dibuka bertahap pada Phase 02–07.'
+            : 'Portal Operator dibatasi sesuai assignedStudioIds dan permission flags dari dokumen membership Firestore Anda.'}
+        </p>
+      </section>
+
+      <section className="grid-3">
+        <article className="panel" style={{ display: 'grid', gap: '6px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Bisnis Aktif
+          </span>
+          <strong style={{ fontSize: '18px' }}>{business?.name || member?.businessId || '-'}</strong>
+          <span className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            ID: {member?.businessId} · {business?.timezone || 'Asia/Jakarta'} · {business?.currency || 'IDR'}
+          </span>
+        </article>
+
+        <article className="panel" style={{ display: 'grid', gap: '6px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Role & Studio Scope
+          </span>
+          <strong style={{ fontSize: '18px', textTransform: 'capitalize' }}>
+            {member?.role} ({member?.status})
+          </strong>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            {isOwner
+              ? 'Semua studio dalam bisnis'
+              : `Assigned studios: ${member?.assignedStudioIds?.length || 0} studio`}
+          </span>
+        </article>
+
+        <article className="panel" style={{ display: 'grid', gap: '6px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Realtime Listener Scope
+          </span>
+          <strong style={{ fontSize: '18px' }}>{activeListenerCount} listener aktif</strong>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            UID: <code className="mono">{authUser?.uid}</code>
+          </span>
+        </article>
+      </section>
+
+      <section className="panel" style={{ display: 'grid', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px' }}>Status Implementasi Modul (Phase Gate)</h2>
+          <span className="badge">
+            <Lock size={13} aria-hidden="true" />
+            <span>Koleksi Phase 02+ masih terkunci di Rules</span>
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gap: '8px' }}>
+          {ROADMAP_PHASES.map((item) => (
+            <div
+              key={item.phase}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-input)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <span className="mono" style={{ fontSize: '12px', color: 'var(--accent-brass)', fontWeight: 700 }}>
+                  P{item.phase}
+                </span>
+                <span style={{ fontSize: '14px' }}>{item.name}</span>
+              </div>
+              {item.state === 'active' ? (
+                <span className="badge badge-success">
+                  <CheckCircle2 size={13} aria-hidden="true" />
+                  <span>Aktif</span>
+                </span>
+              ) : (
+                <span className="badge">
+                  <Clock size={13} aria-hidden="true" />
+                  <span>{item.state === 'next' ? 'Fase Berikutnya' : 'Terjadwal'}</span>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
