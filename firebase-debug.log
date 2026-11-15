@@ -1,0 +1,46 @@
+[debug] [2026-11-15T07:03:22.001Z] ----------------------------------------------------------------------
+[debug] [2026-11-15T07:03:22.004Z] Command:       C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\node_modules\firebase-tools\lib\bin\firebase.js login:list
+[debug] [2026-11-15T07:03:22.005Z] CLI Version:   15.28.1
+[debug] [2026-11-15T07:03:22.005Z] Platform:      win32
+[debug] [2026-11-15T07:03:22.005Z] Node Version:  v24.19.0
+[debug] [2026-11-15T07:03:22.005Z] Detected Agent: antigravity
+[debug] [2026-11-15T07:03:22.006Z] Time:          Sun Nov 15 2026 14:03:22 GMT+0700 (Western Indonesia Time)
+[debug] [2026-11-15T07:03:22.006Z] ----------------------------------------------------------------------
+[debug] 
+[info] Logged in as marsicprod@gmail.com
+[debug] [2026-11-15T07:03:23.781Z] ----------------------------------------------------------------------
+[debug] [2026-11-15T07:03:23.785Z] Command:       C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\node_modules\firebase-tools\lib\bin\firebase.js projects:list
+[debug] [2026-11-15T07:03:23.786Z] CLI Version:   15.28.1
+[debug] [2026-11-15T07:03:23.786Z] Platform:      win32
+[debug] [2026-11-15T07:03:23.786Z] Node Version:  v24.19.0
+[debug] [2026-11-15T07:03:23.787Z] Detected Agent: antigravity
+[debug] [2026-11-15T07:03:23.787Z] Time:          Sun Nov 15 2026 14:03:23 GMT+0700 (Western Indonesia Time)
+[debug] [2026-11-15T07:03:23.787Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-11-15T07:03:23.826Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-11-15T07:03:23.826Z] > authorizing via signed-in user (marsicprod@gmail.com)
+[debug] [2026-11-15T07:03:23.847Z] Checked if tokens are valid: false, expires at: 1794726773459
+[debug] [2026-11-15T07:03:23.847Z] Checked if tokens are valid: false, expires at: 1794726773459
+[debug] [2026-11-15T07:03:23.848Z] > refreshing access token with scopes: []
+[debug] [2026-11-15T07:03:23.851Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-11-15T07:03:23.851Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-15T07:03:23.999Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-11-15T07:03:23.999Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-15T07:03:24.036Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2026-11-15T07:03:24.696Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-11-15T07:03:24.696Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] ┌──────────────────────┬──────────────────────┬────────────────┬──────────────────────┐
+│ Project Display Name │ Project ID           │ Project Number │ Resource Location ID │
+├──────────────────────┼──────────────────────┼────────────────┼──────────────────────┤
+│ Jadwalshifting       │ jadwalshifting-fd32b │ 87227409574    │ [Not specified]      │
+├──────────────────────┼──────────────────────┼────────────────┼──────────────────────┤
+│ 37 Music Studio 2    │ music-studio-2       │ 389184621786   │ [Not specified]      │
+├──────────────────────┼──────────────────────┼────────────────┼──────────────────────┤
+│ 37 Music Studio      │ music-studio-f69d8   │ 209614719546   │ [Not specified]      │
+├──────────────────────┼──────────────────────┼────────────────┼──────────────────────┤
+│ 37 studio proper     │ studio-proper        │ 623592132878   │ [Not specified]      │
+├──────────────────────┼──────────────────────┼────────────────┼──────────────────────┤
+│ 37studioflutter      │ studioflutter37      │ 818476830233   │ [Not specified]      │
+└──────────────────────┴──────────────────────┴────────────────┴──────────────────────┘
+[info] 
+[info] 5 project(s) total.
