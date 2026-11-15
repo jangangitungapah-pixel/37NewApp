@@ -20,7 +20,7 @@ let emulatorConnected = false;
 
 /**
  * Lazily initializes and returns singleton Firebase App, Auth, and Firestore instances.
- * Targets the configured named database (defaulting to "default" for musicstudio37app).
+ * Targets the configured Firestore database (defaulting to "(default)").
  */
 export function getFirebaseServices() {
   if (cachedServices) {

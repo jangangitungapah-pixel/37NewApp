@@ -54,8 +54,8 @@ export function getAppConfig(source = import.meta.env) {
       messagingSenderId: readEnvString('VITE_FIREBASE_MESSAGING_SENDER_ID', source),
       appId: readEnvString('VITE_FIREBASE_APP_ID', source),
       measurementId: readEnvString('VITE_FIREBASE_MEASUREMENT_ID', source),
-      // musicstudio37app provisions an Enterprise Edition database named "default"
-      databaseId: readEnvString('VITE_FIREBASE_DATABASE_ID', source) || 'default',
+      // Target Firestore default database "(default)" unless explicitly overridden via env
+      databaseId: readEnvString('VITE_FIREBASE_DATABASE_ID', source) || '(default)',
       appCheckSiteKey: readEnvString('VITE_FIREBASE_APP_CHECK_SITE_KEY', source),
     },
     emulators: {

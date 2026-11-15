@@ -1,8 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/firebase/firebase-tools/master/schema/firebase-config.json",
   "firestore": {
-    "database": "default",
-    "edition": "enterprise",
+    "database": "(default)",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
@@ -25,8 +24,7 @@
       "port": 9099
     },
     "firestore": {
-      "port": 8080,
-      "edition": "enterprise"
+      "port": 8080
     },
     "hosting": {
       "port": 5000
