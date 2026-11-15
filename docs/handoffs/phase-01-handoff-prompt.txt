@@ -1,0 +1,27 @@
+Lanjutkan pembangunan 37MusicStudio pada workspace `c:\Users\hazel\source\repos\37NewApp` ke **Phase 01: Application Foundation & Firebase Security**.
+
+WAJIB BACA TERLEBIH DAHULU:
+1. `c:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html` (source of truth requirement)
+2. `docs/audit/phase-00-discovery-audit.md`
+3. `docs/adr/0001-architecture-lock.md`
+4. `docs/architecture/rebuild-plan-and-risks.md`
+5. `docs/checkpoints/phase-00-checkpoint.md`
+
+BATASAN KERAS YANG HARUS DIPERTAHANKAN:
+- Stack wajib: React + Vite + JavaScript (JSX), Firebase Authentication, Cloud Firestore, Firebase Hosting, Cloudinary (Phase 06), Firebase Spark plan only.
+- DILARANG menambah Blaze, Cloud Functions, Firebase Storage, backend/API berbayar, atau database kedua.
+- DILARANG menggunakan atau mengubah project Firebase eksisting (`music-studio-2`, `music-studio-f69d8`, `studio-proper`, `studioflutter37`, `jadwalshifting-fd32b`). Gunakan project Firebase baru bila sudah diberikan user, atau gunakan `.env.example` + Firebase Local Emulator Suite untuk validasi lokal.
+- Kerjakan HANYA Phase 01 dalam sesi ini; jangan melompat ke Phase 02+.
+
+CAKUPAN PHASE 01:
+1. Scaffold project React + Vite + JavaScript sesuai struktur modular `src/` (`app/`, `portals/{owner,operator}/`, `features/`, `domain/`, `application/`, `data/`, `infrastructure/`, `shared/`), termasuk design tokens awal dan error boundary.
+2. Siapkan konfigurasi environment terpisah (`.env.example`, baca `import.meta.env`, validasi config eksplisit tanpa secret/service account key di repo).
+3. Inisialisasi `firebase.json` (Hosting + Firestore Rules/Indexes + Emulator config), `.firebaserc` (hanya bila project Firebase baru sudah dikonfirmasi user; jangan pakai project eksisting), `firestore.rules`, dan `firestore.indexes.json`.
+4. Implementasikan Firebase Authentication adapter, Firestore adapter, `users/{uid}` & `businesses/{businessId}/members/{uid}` membership resolution, route guard Owner Portal & Operator Portal, serta pembersihan state + unsubscribe seluruh listener saat logout.
+5. Tulis `firestore.rules` secara deny-by-default dengan validasi `request.auth.uid`, active membership, role (`owner`/`operator`), `assignedStudioIds`, field allowlist, tipe data, serta proteksi agar user tidak bisa mengubah role/status/assignment miliknya sendiri.
+6. Verifikasi lokal:
+   - Jalankan build produksi (`npm run build`), lint/unit checks, dan uji `firestore.rules` via Firebase Emulator Suite (bila emulator binaries tersedia / dapat diuji lokal) dengan seluruh stdout & stderr tersimpan ke file `logs/phase-01-verification-<timestamp>.txt` beserta exit code tiap tahap.
+7. Setelah Phase 01 selesai:
+   - Buat dokumentasi checkpoint `docs/checkpoints/phase-01-checkpoint.md`.
+   - Buat handoff prompt `docs/handoffs/phase-02-handoff-prompt.txt`.
+   - Berikan handover lengkap sesuai Section 16 Master Prompt dan STOP sebelum Phase 02.
