@@ -42,6 +42,63 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/bookingOperations/$(operationId);
     }
 
+    function bookingPath(businessId, bookingId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/bookings/$(bookingId);
+    }
+
+    function hasMatchingSlotReservationAfter(businessId, bookingId, studioId, slotId, operationTypes) {
+      let targetBooking = bookingPath(businessId, bookingId);
+      return bookingId is string
+        && existsAfter(targetBooking)
+        && getAfter(targetBooking).data.bookingId == bookingId
+        && getAfter(targetBooking).data.businessId == businessId
+        && getAfter(targetBooking).data.studioId == studioId
+        && getAfter(targetBooking).data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+        && getAfter(targetBooking).data.slotIds is list
+        && getAfter(targetBooking).data.slotIds.hasAny([slotId])
+        && getAfter(targetBooking).data.lastOperationId is string
+        && existsAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId))
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationId
+          == getAfter(targetBooking).data.lastOperationId
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.bookingId == bookingId
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.studioId == studioId
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationType in operationTypes
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorUid == request.auth.uid
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorRole == currentMember(businessId).role
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.payloadHash
+          == getAfter(targetBooking).data.lastOperationPayloadHash;
+    }
+
+    function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId) {
+      let targetBooking = bookingPath(businessId, bookingId);
+      return bookingId is string
+        && existsAfter(targetBooking)
+        && getAfter(targetBooking).data.bookingId == bookingId
+        && getAfter(targetBooking).data.businessId == businessId
+        && getAfter(targetBooking).data.studioId == studioId
+        && getAfter(targetBooking).data.lastOperationId is string
+        && existsAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId))
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.bookingId == bookingId
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.studioId == studioId
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorUid == request.auth.uid
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorRole == currentMember(businessId).role
+        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.payloadHash
+          == getAfter(targetBooking).data.lastOperationPayloadHash
+        && (
+          (
+            getAfter(targetBooking).data.status in ['CANCELLED', 'REJECTED', 'NO_SHOW']
+            && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationType == 'booking.session'
+          )
+          || (
+            getAfter(targetBooking).data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && getAfter(targetBooking).data.slotIds is list
+            && !getAfter(targetBooking).data.slotIds.hasAny([slotId])
+            && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationType == 'booking.reschedule'
+          )
+        );
+    }
+
+
     function bookingSessionEventPath(businessId, eventId) {
       return /databases/$(database)/documents/businesses/$(businessId)/bookingSessionEvents/$(eventId);
     }
@@ -2025,7 +2082,12 @@ service cloud.firestore {
           && request.resource.data.reservedBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.reservedAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && hasMatchingSlotReservationAfter(
+            businessId, request.resource.data.bookingId,
+            request.resource.data.studioId, slotId,
+            ['booking.create', 'booking.reschedule']
+          );
 
         allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
           && isValidBookingSlotData(request.resource.data, businessId, slotId)
@@ -2037,12 +2099,33 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && (
-            (resource.data.status == 'released' && request.resource.data.status == 'active')
-            || (resource.data.status == 'active' && request.resource.data.status == 'released')
+            (
+              request.resource.data.status == 'active'
+              && request.resource.data.bookingId is string
+              && request.resource.data.reservedBy == request.auth.uid
+              && request.resource.data.reservedAt == request.time
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.create', 'booking.reschedule']
+              )
+              && (
+                resource.data.status == 'released'
+                || (
+                  resource.data.status == 'active'
+                  && resource.data.bookingId == request.resource.data.bookingId
+                )
+              )
+            )
             || (
               resource.data.status == 'active'
-              && request.resource.data.status == 'active'
-              && request.resource.data.bookingId == resource.data.bookingId
+              && request.resource.data.status == 'released'
+              && request.resource.data.bookingId == null
+              && request.resource.data.releasedAt == request.time
+              && hasMatchingSlotReleaseAfter(
+                businessId, resource.data.bookingId,
+                resource.data.studioId, slotId
+              )
             )
           );
 
@@ -3035,7 +3118,12 @@ service cloud.firestore {
           && request.resource.data.reservedBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.reservedAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && hasMatchingSlotReservationAfter(
+            businessId, request.resource.data.bookingId,
+            request.resource.data.studioId, slotId,
+            ['booking.create', 'booking.reschedule']
+          );
 
         allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
           && isValidBookingSlotData(request.resource.data, businessId, slotId)
@@ -3047,12 +3135,33 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && (
-            (resource.data.status == 'released' && request.resource.data.status == 'active')
-            || (resource.data.status == 'active' && request.resource.data.status == 'released')
+            (
+              request.resource.data.status == 'active'
+              && request.resource.data.bookingId is string
+              && request.resource.data.reservedBy == request.auth.uid
+              && request.resource.data.reservedAt == request.time
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.create', 'booking.reschedule']
+              )
+              && (
+                resource.data.status == 'released'
+                || (
+                  resource.data.status == 'active'
+                  && resource.data.bookingId == request.resource.data.bookingId
+                )
+              )
+            )
             || (
               resource.data.status == 'active'
-              && request.resource.data.status == 'active'
-              && request.resource.data.bookingId == resource.data.bookingId
+              && request.resource.data.status == 'released'
+              && request.resource.data.bookingId == null
+              && request.resource.data.releasedAt == request.time
+              && hasMatchingSlotReleaseAfter(
+                businessId, resource.data.bookingId,
+                resource.data.studioId, slotId
+              )
             )
           );
 
@@ -3257,7 +3366,12 @@ service cloud.firestore {
           && request.resource.data.reservedBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.reservedAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && hasMatchingSlotReservationAfter(
+            businessId, request.resource.data.bookingId,
+            request.resource.data.studioId, slotId,
+            ['booking.create', 'booking.reschedule']
+          );
 
         allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
           && isValidBookingSlotData(request.resource.data, businessId, slotId)
@@ -3269,12 +3383,33 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && (
-            (resource.data.status == 'released' && request.resource.data.status == 'active')
-            || (resource.data.status == 'active' && request.resource.data.status == 'released')
+            (
+              request.resource.data.status == 'active'
+              && request.resource.data.bookingId is string
+              && request.resource.data.reservedBy == request.auth.uid
+              && request.resource.data.reservedAt == request.time
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.create', 'booking.reschedule']
+              )
+              && (
+                resource.data.status == 'released'
+                || (
+                  resource.data.status == 'active'
+                  && resource.data.bookingId == request.resource.data.bookingId
+                )
+              )
+            )
             || (
               resource.data.status == 'active'
-              && request.resource.data.status == 'active'
-              && request.resource.data.bookingId == resource.data.bookingId
+              && request.resource.data.status == 'released'
+              && request.resource.data.bookingId == null
+              && request.resource.data.releasedAt == request.time
+              && hasMatchingSlotReleaseAfter(
+                businessId, resource.data.bookingId,
+                resource.data.studioId, slotId
+              )
             )
           );
 
@@ -4001,7 +4136,12 @@ service cloud.firestore {
           && request.resource.data.reservedBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.reservedAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          && hasMatchingSlotReservationAfter(
+            businessId, request.resource.data.bookingId,
+            request.resource.data.studioId, slotId,
+            ['booking.create', 'booking.reschedule']
+          );
 
         allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
           && isValidBookingSlotData(request.resource.data, businessId, slotId)
@@ -4013,12 +4153,33 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && (
-            (resource.data.status == 'released' && request.resource.data.status == 'active')
-            || (resource.data.status == 'active' && request.resource.data.status == 'released')
+            (
+              request.resource.data.status == 'active'
+              && request.resource.data.bookingId is string
+              && request.resource.data.reservedBy == request.auth.uid
+              && request.resource.data.reservedAt == request.time
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.create', 'booking.reschedule']
+              )
+              && (
+                resource.data.status == 'released'
+                || (
+                  resource.data.status == 'active'
+                  && resource.data.bookingId == request.resource.data.bookingId
+                )
+              )
+            )
             || (
               resource.data.status == 'active'
-              && request.resource.data.status == 'active'
-              && request.resource.data.bookingId == resource.data.bookingId
+              && request.resource.data.status == 'released'
+              && request.resource.data.bookingId == null
+              && request.resource.data.releasedAt == request.time
+              && hasMatchingSlotReleaseAfter(
+                businessId, resource.data.bookingId,
+                resource.data.studioId, slotId
+              )
             )
           );
 
