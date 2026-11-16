@@ -34,6 +34,9 @@ import {
   filterAccessibleStudios,
 } from '../../domain/policies/accessPolicy.js';
 import { parseTimeToMinutes } from '../../domain/validators/masterDataValidators.js';
+import { Button } from '../../components/ui/Button.jsx';
+import { Input } from '../../components/ui/Input.jsx';
+import { SelectField } from '../../components/ui/SelectField.jsx';
 import { StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscription.js';
 import { formatIdr, formatOperatingHours } from '../../shared/utils/formatters.js';
@@ -154,6 +157,8 @@ export function BookingCalendarPage() {
     data: rawBookings,
     loading: bookingsLoading,
     fromCache,
+    possiblyTruncated,
+    metadata: bookingQueryMetadata,
     error: bookingsError,
   } = useRegistrySubscription(
     'phase03:calendar:bookings',
@@ -195,7 +200,7 @@ export function BookingCalendarPage() {
   const filteredBookings = useMemo(() => {
     return rawBookings.filter((b) => {
       if (statusFilter === 'active_all') {
-        return b.status !== BOOKING_STATUS.CANCELLED && b.status !== BOOKING_STATUS.NO_SHOW;
+        return ![BOOKING_STATUS.CANCELLED, BOOKING_STATUS.NO_SHOW, BOOKING_STATUS.REJECTED].includes(b.status);
       }
       if (statusFilter === 'all') {
         return true;
@@ -304,7 +309,7 @@ export function BookingCalendarPage() {
         <div>
           <h1 className="page-title">Kalender & Booking Studio</h1>
           <p className="page-subtitle">
-            Jadwal realtime dalam zona waktu <span className="mono">{tz}</span> · Lock slot atomik anti-double-booking per 15 menit.
+            Jadwal realtime dalam zona waktu <span className="mono">{tz}</span> · Reservasi slot transaksi untuk alur resmi aplikasi.
           </p>
         </div>
 
@@ -346,6 +351,16 @@ export function BookingCalendarPage() {
           variant="warning"
           title="Menampilkan Data Cache Lokal"
           message="Jadwal berasal dari cache lokal perangkat. Pastikan tersambung sebelum mengubah booking."
+        />
+      )}
+
+      {possiblyTruncated && (
+        <StatusAlert
+          variant="warning"
+          title="Jadwal yang Ditampilkan Mungkin Belum Lengkap"
+          message={bookingQueryMetadata?.truncatedChunks
+            ? `Sedikitnya satu dari ${bookingQueryMetadata.chunkCount} kelompok studio mencapai batas ${bookingQueryMetadata.limitPerChunk} booking. Persempit filter studio atau rentang tanggal sebelum mengambil keputusan operasional.`
+            : `Query kalender mencapai batas ${bookingQueryMetadata?.limit || 150} booking. Persempit filter studio atau rentang tanggal sebelum mengambil keputusan operasional.`}
         />
       )}
 
@@ -426,37 +441,36 @@ export function BookingCalendarPage() {
 
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
             <Filter size={14} aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
-            <select
+            <SelectField
               aria-label="Filter studio"
-              className="field-input"
-              style={{ width: 'auto', minHeight: '34px', padding: '4px 10px' }}
+              className="min-w-40"
               value={effectiveStudioFilter}
-              onChange={(e) => setSelectedStudioFilter(e.target.value)}
-            >
-              <option value="all">
-                Semua Studio ({accessibleStudios.length})
-              </option>
-              {accessibleStudios.map((studio) => (
-                <option key={studio.studioId} value={studio.studioId}>
-                  {studio.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setSelectedStudioFilter}
+              options={[
+                { value: 'all', label: `Semua Studio (${accessibleStudios.length})` },
+                ...accessibleStudios.map((studio) => ({ value: studio.studioId, label: studio.name })),
+              ]}
+            />
 
-            <select
+            <SelectField
               aria-label="Filter status booking"
-              className="field-input"
-              style={{ width: 'auto', minHeight: '34px', padding: '4px 10px' }}
+              className="min-w-52"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="active_all">Aktif & Terjadwal</option>
-              <option value="all">Semua Status (termasuk Cancel/No-Show)</option>
-              <option value={BOOKING_STATUS.PENDING_CONFIRMATION}>Pending Konfirmasi</option>
-              <option value={BOOKING_STATUS.CONFIRMED}>Terkonfirmasi</option>
-              <option value={BOOKING_STATUS.IN_PROGRESS}>Sesi Berjalan</option>
-              <option value={BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT}>Menunggu Settlement</option>
-            </select>
+              onValueChange={setStatusFilter}
+              options={[
+                { value: 'active_all', label: 'Aktif & Terjadwal' },
+                { value: 'all', label: 'Semua Status' },
+                { value: BOOKING_STATUS.PENDING_CONFIRMATION, label: 'Pending Konfirmasi' },
+                { value: BOOKING_STATUS.CONFIRMED, label: 'Terkonfirmasi' },
+                { value: BOOKING_STATUS.IN_PROGRESS, label: 'Legacy: In Progress' },
+                { value: BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT, label: 'Menunggu Settlement' },
+                { value: BOOKING_STATUS.SETTLEMENT_REVIEW, label: 'Review Settlement' },
+                { value: BOOKING_STATUS.SETTLED, label: 'Settled / Lunas' },
+                { value: BOOKING_STATUS.REJECTED, label: 'Ditolak' },
+                { value: BOOKING_STATUS.CANCELLED, label: 'Dibatalkan' },
+                { value: BOOKING_STATUS.NO_SHOW, label: 'No-Show' },
+              ]}
+            />
           </div>
         </div>
       </section>
@@ -498,17 +512,24 @@ export function BookingCalendarPage() {
                       <td
                         key={`${col.key}_${row.timeHHmm}`}
                         className={`calendar-cell ${canCreateBooking && cellBookings.length === 0 ? 'calendar-cell-free' : ''}`}
-                        onClick={() => {
-                          if (cellBookings.length === 0 && canCreateBooking && targetStudioId) {
-                            setCreatePrefill({
-                              studioId: targetStudioId,
-                              dateKey: col.dateKey,
-                              startTime: row.timeHHmm,
-                            });
-                          }
-                        }}
                       >
-                        <div style={{ display: 'grid', gap: '4px' }}>
+                        <div className="grid gap-1">
+                          {cellBookings.length === 0 && canCreateBooking && targetStudioId && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="min-h-12 w-full whitespace-normal text-xs text-muted-foreground hover:text-foreground"
+                              aria-label={`Buat booking ${col.dateKey} pukul ${row.timeHHmm} di studio ${targetStudioId}`}
+                              onClick={() => setCreatePrefill({
+                                studioId: targetStudioId,
+                                dateKey: col.dateKey,
+                                startTime: row.timeHHmm,
+                              })}
+                            >
+                              + Booking
+                            </Button>
+                          )}
                           {cellBookings.map((b) => {
                             const meta = getBookingStatusMeta(b.status);
                             return (
