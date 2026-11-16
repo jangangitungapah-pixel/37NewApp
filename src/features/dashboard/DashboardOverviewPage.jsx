@@ -106,10 +106,10 @@ export function DashboardOverviewPage({ portalRole }) {
     [],
   );
 
-  const { data: settingsDocs } = useRegistrySubscription(
+  const { data: settingsMap } = useRegistrySubscription(
     `dash-settings:${businessId}`,
     businessId ? subscribeSettingsFn : null,
-    [],
+    {},
   );
 
   const { data: teamMembers } = useRegistrySubscription(
@@ -119,9 +119,12 @@ export function DashboardOverviewPage({ portalRole }) {
   );
 
   const scheduleSetting = useMemo(() => {
-    const found = (settingsDocs || []).find((s) => s.settingId === SETTING_IDS.SCHEDULE);
-    return found || null;
-  }, [settingsDocs]);
+    if (!settingsMap) return null;
+    if (Array.isArray(settingsMap)) {
+      return settingsMap.find((s) => s?.settingId === SETTING_IDS.SCHEDULE) || null;
+    }
+    return settingsMap[SETTING_IDS.SCHEDULE] || null;
+  }, [settingsMap]);
 
   const studioNameMap = useMemo(() => {
     const map = new Map();
