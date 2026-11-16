@@ -46,12 +46,12 @@ import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscript
 import { formatIdr } from '../../shared/utils/formatters.js';
 import { getBookingStatusMeta } from './bookingStatusUi.js';
 
-function formatLogTimestamp(dateVal) {
+function formatLogTimestamp(dateVal, timeZone = 'Asia/Jakarta') {
   if (!(dateVal instanceof Date) || Number.isNaN(dateVal.getTime())) {
-    return 'Baru saja';
+    return 'Waktu tidak tersedia';
   }
   return new Intl.DateTimeFormat('id-ID', {
-    timeZone: 'Asia/Jakarta',
+    timeZone,
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
@@ -399,10 +399,10 @@ export function BookingDetailModal({
               <div className="font-semibold text-foreground">{sessionStatus.replaceAll('_', ' ')}</div>
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
-              {booking.checkedInAt && <div>Check-in: {formatLogTimestamp(booking.checkedInAt)} · {booking.checkedInByName || booking.checkedInByUid || 'Aktor tidak tercatat'}</div>}
-              {booking.actualStartAt && <div>Mulai aktual: {formatLogTimestamp(booking.actualStartAt)} · {booking.actualStartByName || booking.actualStartByUid || 'Aktor tidak tercatat'}</div>}
-              {booking.actualEndAt && <div>Selesai aktual: {formatLogTimestamp(booking.actualEndAt)} · {booking.actualEndByName || booking.actualEndByUid || 'Aktor tidak tercatat'} · {booking.actualDurationMinutes ?? '—'} menit</div>}
-              {booking.noShowAt && <div>No-Show: {formatLogTimestamp(booking.noShowAt)} · {booking.noShowByName || booking.noShowByUid || 'Aktor tidak tercatat'}</div>}
+              {booking.checkedInAt && <div>Check-in: {formatLogTimestamp(booking.checkedInAt, timezone)} · {booking.checkedInByName || booking.checkedInByUid || 'Aktor tidak tercatat'}</div>}
+              {booking.actualStartAt && <div>Mulai aktual: {formatLogTimestamp(booking.actualStartAt, timezone)} · {booking.actualStartByName || booking.actualStartByUid || 'Aktor tidak tercatat'}</div>}
+              {booking.actualEndAt && <div>Selesai aktual: {formatLogTimestamp(booking.actualEndAt, timezone)} · {booking.actualEndByName || booking.actualEndByUid || 'Aktor tidak tercatat'} · {booking.actualDurationMinutes ?? '—'} menit</div>}
+              {booking.noShowAt && <div>No-Show: {formatLogTimestamp(booking.noShowAt, timezone)} · {booking.noShowByName || booking.noShowByUid || 'Aktor tidak tercatat'}</div>}
               {sessionStatus === SESSION_STATUS.IN_PROGRESS && !booking.actualStartAt && (
                 <div className="rounded-lg border border-warning/30 bg-warning/10 p-2 text-warning-foreground">
                   Data legacy: status sesi berjalan tersedia, tetapi waktu mulai aktual tidak pernah direkam. Waktu tidak dibuat-buat.
@@ -744,7 +744,7 @@ export function BookingDetailModal({
                 <article key={event.eventId} className="grid gap-1 rounded-xl border border-border bg-card px-3 py-2.5 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <strong className="font-semibold text-foreground">{event.action.replaceAll('_', ' ')}</strong>
-                    <span className="text-muted-foreground">{formatLogTimestamp(event.createdAt)} · {event.actorName} ({event.actorRole})</span>
+                    <span className="text-muted-foreground">{formatLogTimestamp(event.createdAt, timezone)} · {event.actorName} ({event.actorRole})</span>
                   </div>
                   <span className="text-muted-foreground">{event.fromStatus.replaceAll('_', ' ')} → {event.toStatus.replaceAll('_', ' ')}</span>
                   {event.reason && <span className="text-muted-foreground">Alasan: {event.reason}</span>}
@@ -782,7 +782,7 @@ export function BookingDetailModal({
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                     <strong style={{ color: 'var(--text-primary)' }}>{log.eventType}</strong>
                     <span className="mono" style={{ color: 'var(--text-muted)' }}>
-                      {formatLogTimestamp(log.createdAt)} · {log.actorRole}
+                      {formatLogTimestamp(log.createdAt, timezone)} · {log.actorRole}
                     </span>
                   </div>
                   <div style={{ color: 'var(--text-secondary)' }}>{log.summary}</div>
