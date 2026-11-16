@@ -18,6 +18,7 @@ import {
   BOOKING_STATUS,
   ROLES,
   SCHEMA_VERSIONS,
+  SESSION_STATUS,
 } from '../../domain/enums/roles.js';
 import {
   assertValidBookingTransition,
@@ -559,8 +560,17 @@ export async function transitionBookingStatusTransaction({
         : [];
       const slotSnaps = slotRefs.length > 0 ? await Promise.all(slotRefs.map((ref) => tx.get(ref))) : [];
 
+      const sessionStatusByBookingStatus = {
+        [BOOKING_STATUS.CONFIRMED]: SESSION_STATUS.UPCOMING,
+        [BOOKING_STATUS.IN_PROGRESS]: SESSION_STATUS.IN_PROGRESS,
+        [BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT]: SESSION_STATUS.COMPLETED,
+        [BOOKING_STATUS.CANCELLED]: SESSION_STATUS.CANCELLED,
+        [BOOKING_STATUS.NO_SHOW]: SESSION_STATUS.NO_SHOW,
+        [BOOKING_STATUS.REJECTED]: SESSION_STATUS.CANCELLED,
+      };
       const bookingUpdate = {
         status: targetStatus,
+        sessionStatus: sessionStatusByBookingStatus[targetStatus] || currentBooking.sessionStatus,
         lastOperationId: operationContext.operationId,
         lastOperationType: BOOKING_OPERATION_TYPE.DECISION,
         lastOperationPayloadHash: operationContext.payloadHash,
@@ -569,6 +579,7 @@ export async function transitionBookingStatusTransaction({
       };
 
       if (targetStatus === BOOKING_STATUS.IN_PROGRESS) {
+        // Compatibility-only legacy path; new UI uses the session start action.
         bookingUpdate.checkedInAt = serverTimestamp();
       } else if (targetStatus === BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT) {
         bookingUpdate.completedAt = serverTimestamp();
@@ -628,7 +639,7 @@ export async function transitionBookingStatusTransaction({
         actorUid,
         actorRole,
         resultBookingStatus: targetStatus,
-        resultSessionStatus: currentBooking.sessionStatus,
+        resultSessionStatus: bookingUpdate.sessionStatus,
       }));
 
       return { ...currentBooking, ...bookingUpdate, status: targetStatus };
