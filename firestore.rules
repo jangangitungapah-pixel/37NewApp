@@ -555,7 +555,17 @@ service cloud.firestore {
     function isValidBookingSessionUpdate(businessId, bookingId, oldData, newData) {
       let fromSessionStatus = oldData.get(
         'sessionStatus',
-        oldData.status == 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING'
+        oldData.status == 'PENDING_CONFIRMATION'
+          ? 'PENDING'
+          : oldData.status == 'IN_PROGRESS'
+            ? 'IN_PROGRESS'
+            : oldData.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW', 'SETTLED']
+              ? 'COMPLETED'
+              : oldData.status == 'NO_SHOW'
+                ? 'NO_SHOW'
+                : oldData.status in ['CANCELLED', 'REJECTED']
+                  ? 'CANCELLED'
+                  : 'UPCOMING'
       );
       return canOperateStudioBooking(businessId, oldData.studioId)
         && newData.updatedBy == request.auth.uid
@@ -656,7 +666,7 @@ service cloud.firestore {
           )
           || (
             newData.lastSessionEventType == 'cancel'
-            && oldData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && oldData.status in ['PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS']
             && fromSessionStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
             && newData.status == 'CANCELLED'
             && newData.sessionStatus == 'CANCELLED'
