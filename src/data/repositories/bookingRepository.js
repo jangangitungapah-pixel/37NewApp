@@ -513,15 +513,21 @@ export async function transitionBookingStatusTransaction({
   reason = null,
   actorUid,
   actorRole,
+  operationContext,
 }) {
+  assertOperationContext(operationContext);
   try {
     const { db } = getFirebaseServices();
     const bookingRef = doc(db, 'businesses', businessId, 'bookings', bookingId);
     const shouldReleaseSlots = RELEASING_BOOKING_STATUSES.has(targetStatus);
     const eventType = mapStatusToActivityEventType(targetStatus);
 
+    const operationRef = bookingOperationRef(db, businessId, operationContext.operationId);
     return await runTransaction(db, async (tx) => {
-      const bookingSnap = await tx.get(bookingRef);
+      const [operationSnap, bookingSnap] = await Promise.all([
+        tx.get(operationRef),
+        tx.get(bookingRef),
+      ]);
       if (!bookingSnap.exists()) {
         throw new AppError({
           category: ERROR_CATEGORY.NOT_FOUND,
@@ -531,6 +537,19 @@ export async function transitionBookingStatusTransaction({
       }
 
       const currentBooking = mapBookingSnapshot(bookingSnap);
+      if (operationSnap.exists()) {
+        assertBookingOperationReplay(operationSnap.data(), {
+          operationContext,
+          businessId,
+          bookingId,
+          studioId: currentBooking.studioId,
+          actorUid,
+          actorRole,
+          operationType: BOOKING_OPERATION_TYPE.DECISION,
+          action: `decision:${targetStatus}`,
+        });
+        return currentBooking;
+      }
       assertValidBookingTransition(currentBooking.status, targetStatus);
 
       const slotRefs = shouldReleaseSlots
@@ -542,6 +561,9 @@ export async function transitionBookingStatusTransaction({
 
       const bookingUpdate = {
         status: targetStatus,
+        lastOperationId: operationContext.operationId,
+        lastOperationType: BOOKING_OPERATION_TYPE.DECISION,
+        lastOperationPayloadHash: operationContext.payloadHash,
         updatedAt: serverTimestamp(),
         updatedBy: actorUid,
       };
@@ -596,8 +618,20 @@ export async function transitionBookingStatusTransaction({
         schemaVersion: SCHEMA_VERSIONS.ACTIVITY_LOG,
         createdAt: serverTimestamp(),
       });
+      tx.set(operationRef, buildBookingOperationMarker({
+        operationContext,
+        operationType: BOOKING_OPERATION_TYPE.DECISION,
+        action: `decision:${targetStatus}`,
+        businessId,
+        bookingId,
+        studioId: currentBooking.studioId,
+        actorUid,
+        actorRole,
+        resultBookingStatus: targetStatus,
+        resultSessionStatus: currentBooking.sessionStatus,
+      }));
 
-      return { ...currentBooking, status: targetStatus };
+      return { ...currentBooking, ...bookingUpdate, status: targetStatus };
     });
   } catch (error) {
     if (error instanceof AppError) {
@@ -620,13 +654,19 @@ export async function rescheduleBookingTransaction({
   reason = null,
   actorUid,
   actorRole,
+  operationContext,
 }) {
+  assertOperationContext(operationContext);
   try {
     const { db } = getFirebaseServices();
     const bookingRef = doc(db, 'businesses', businessId, 'bookings', bookingId);
+    const operationRef = bookingOperationRef(db, businessId, operationContext.operationId);
 
     return await runTransaction(db, async (tx) => {
-      const bookingSnap = await tx.get(bookingRef);
+      const [operationSnap, bookingSnap] = await Promise.all([
+        tx.get(operationRef),
+        tx.get(bookingRef),
+      ]);
       if (!bookingSnap.exists()) {
         throw new AppError({
           category: ERROR_CATEGORY.NOT_FOUND,
@@ -636,6 +676,19 @@ export async function rescheduleBookingTransaction({
       }
 
       const current = mapBookingSnapshot(bookingSnap);
+      if (operationSnap.exists()) {
+        assertBookingOperationReplay(operationSnap.data(), {
+          operationContext,
+          businessId,
+          bookingId,
+          studioId: current.studioId,
+          actorUid,
+          actorRole,
+          operationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+          action: 'reschedule',
+        });
+        return current;
+      }
       if (!RESCHEDULABLE_BOOKING_STATUSES.has(current.status)) {
         throw new AppError({
           category: ERROR_CATEGORY.FAILED_PRECONDITION,
@@ -681,6 +734,9 @@ export async function rescheduleBookingTransaction({
       const nextRescheduleCount = (current.rescheduleCount || 0) + 1;
 
       tx.update(bookingRef, {
+        lastOperationId: operationContext.operationId,
+        lastOperationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+        lastOperationPayloadHash: operationContext.payloadHash,
         dateKey: newSlotPlan.dateKey,
         timezone: newSlotPlan.timezone,
         startTime: newSlotPlan.startTime,
@@ -782,6 +838,18 @@ export async function rescheduleBookingTransaction({
         schemaVersion: SCHEMA_VERSIONS.ACTIVITY_LOG,
         createdAt: serverTimestamp(),
       });
+      tx.set(operationRef, buildBookingOperationMarker({
+        operationContext,
+        operationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+        action: 'reschedule',
+        businessId,
+        bookingId,
+        studioId: current.studioId,
+        actorUid,
+        actorRole,
+        resultBookingStatus: current.status,
+        resultSessionStatus: current.sessionStatus,
+      }));
 
       return {
         ...current,
