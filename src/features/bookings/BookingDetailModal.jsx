@@ -40,6 +40,9 @@ import {
 import { subscribeBookingSessionEvents } from '../../data/repositories/bookingSessionRepository.js';
 import { DialogModal } from '../../components/ui/DialogModal.jsx';
 import { Button } from '../../components/ui/Button.jsx';
+import { Input } from '../../components/ui/Input.jsx';
+import { SelectField } from '../../components/ui/SelectField.jsx';
+import { FormField } from '../../components/forms/FormField.jsx';
 import { Textarea } from '../../components/ui/Textarea.jsx';
 import { StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscription.js';
@@ -638,94 +641,88 @@ export function BookingDetailModal({
 
         {/* Reschedule Atomic Swap Sub-Form */}
         {mode === 'reschedule' && (
-          <form onSubmit={handleRescheduleSubmit} className="panel" style={{ display: 'grid', gap: '12px', padding: '14px' }}>
-            <strong style={{ fontSize: '14px' }}>
-              Reschedule Atomik (Melepas Slot Lama & Mengunci Slot Baru)
-            </strong>
-            <div className="grid-3">
-              <div className="field">
-                <label className="field-label" htmlFor="rs-date">
-                  Tanggal Baru
-                </label>
-                <input
+          <form onSubmit={handleRescheduleSubmit} className="grid gap-4 rounded-2xl border border-border bg-card p-4">
+            <div className="space-y-1">
+              <strong className="text-sm font-semibold text-foreground">
+                Reschedule Atomik
+              </strong>
+              <p className="text-xs text-muted-foreground">
+                Slot lama dilepas dan slot baru dikunci dalam satu transaksi Firestore.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormField label={`Tanggal Baru (${timezone})`} required>
+                <Input
                   id="rs-date"
                   type="date"
-                  className="field-input"
                   value={newDateKey}
-                  onChange={(e) => setNewDateKey(e.target.value)}
+                  onChange={(event) => setNewDateKey(event.target.value)}
                   required
                 />
-              </div>
-              <div className="field">
-                <label className="field-label" htmlFor="rs-start">
-                  Jam Mulai Baru
-                </label>
-                <select
+              </FormField>
+              <FormField label="Jam Mulai Baru" required>
+                <SelectField
                   id="rs-start"
-                  className="field-input"
                   value={newStartTime}
-                  onChange={(e) => setNewStartTime(e.target.value)}
-                >
-                  {startOptions.map((opt) => (
-                    <option key={opt.timeHHmm} value={opt.timeHHmm}>
-                      {opt.timeHHmm} WIB {occupiedByOtherBooking.has(opt.bucketIndex) ? '— [Bentrok]' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label className="field-label" htmlFor="rs-dur">
-                  Durasi
-                </label>
-                <select
+                  onValueChange={setNewStartTime}
+                  options={startOptions.map((option) => {
+                    const conflicted = occupiedByOtherBooking.has(option.bucketIndex);
+                    return {
+                      value: option.timeHHmm,
+                      label: `${option.timeHHmm} · ${conflicted ? 'Bentrok' : 'Tersedia'}`,
+                      disabled: conflicted,
+                    };
+                  })}
+                />
+              </FormField>
+              <FormField label="Durasi" required>
+                <SelectField
                   id="rs-dur"
-                  className="field-input"
                   value={newDurationMinutes}
-                  onChange={(e) => setNewDurationMinutes(Number(e.target.value))}
-                >
-                  {durationOptions.map((dur) => (
-                    <option key={dur} value={dur}>
-                      {dur} menit
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  onValueChange={(value) => setNewDurationMinutes(Number(value))}
+                  options={durationOptions.map((duration) => ({
+                    value: duration,
+                    label: `${duration} menit`,
+                  }))}
+                />
+              </FormField>
             </div>
 
-            <div className="field">
-              <label className="field-label" htmlFor="rs-reason">
-                Alasan Reschedule (opsional)
-              </label>
-              <input
+            <FormField label="Alasan Reschedule (opsional)">
+              <Textarea
                 id="rs-reason"
-                className="field-input"
+                rows={2}
                 placeholder="Contoh: Pindah jadwal ke sore"
                 maxLength={300}
                 value={reasonText}
-                onChange={(e) => setReasonText(e.target.value)}
+                onChange={(event) => setReasonText(event.target.value)}
               />
-            </div>
+            </FormField>
 
-            {reschedulePreview?.error && <span className="field-error">{reschedulePreview.error}</span>}
+            {reschedulePreview?.error && (
+              <StatusAlert variant="warning" title="Jadwal belum valid" message={reschedulePreview.error} />
+            )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button type="button" className="btn btn-sm" onClick={() => setMode('view')}>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setMode('view')}>
                 Batal
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={submitting || !isOnline || Boolean(reschedulePreview?.error)}
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                disabled={!isOnline || Boolean(reschedulePreview?.error)}
               >
                 {!isOnline ? (
                   <>
                     <WifiOff size={14} aria-hidden="true" />
-                    <span>Offline</span>
+                    Offline
                   </>
                 ) : (
-                  <span>{submitting ? 'Menyimpan...' : 'Simpan Reschedule'}</span>
+                  'Simpan Reschedule'
                 )}
-              </button>
+              </Button>
             </div>
           </form>
         )}
