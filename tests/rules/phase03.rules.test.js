@@ -413,6 +413,19 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
       updatedAt: serverTimestamp(),
     }));
 
+    const orphanPlan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '20:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+    });
+    const orphanSlot = orphanPlan.allSlots[0];
+    await assertFails(setDoc(
+      doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', orphanSlot.slotId),
+      makeSlotPayload({ slot: orphanSlot, bookingId: 'bk-missing-companion', actorUid: OP_A_UID }),
+    ));
+
     await assertSucceeds(runSessionTransition(ownerDb, {
       bookingId: 'bk-1',
       actorUid: OWNER_UID,
@@ -444,6 +457,56 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
     expect(claimed.data().bookingId).toBe('bk-2');
     const cancelEvent = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSessionEvents', 'booking_session__cancel__bk-1'));
     expect(cancelEvent.exists()).toBe(true);
+  });
+
+  it('documents the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '20:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+    });
+    const operationContext = makeOperationContext({
+      bookingId: 'bk-direct-accepted-risk',
+      studioId: 'studio-a',
+      actorUid: OWNER_UID,
+      actorRole: 'owner',
+      operationType: 'booking.create',
+      action: 'create',
+      resultBookingStatus: 'CONFIRMED',
+      resultSessionStatus: 'UPCOMING',
+    });
+
+    // This deliberately bypasses the official repository and writes only the
+    // booking + its marker. Option A explicitly accepts that Rules cannot
+    // iterate all arbitrary slotIds and prove every lock exists.
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-direct-accepted-risk');
+      const operationRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId);
+      const [bookingSnap, operationSnap] = await Promise.all([
+        tx.get(bookingRef),
+        tx.get(operationRef),
+      ]);
+      expect(bookingSnap.exists()).toBe(false);
+      expect(operationSnap.exists()).toBe(false);
+      tx.set(bookingRef, makeBookingPayload({
+        bookingId: 'bk-direct-accepted-risk',
+        studioId: 'studio-a',
+        actorUid: OWNER_UID,
+        slotPlan: plan,
+        operationContext,
+      }));
+      tx.set(operationRef, operationContext.marker);
+    }));
+
+    const booking = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-direct-accepted-risk'));
+    expect(booking.exists()).toBe(true);
+    for (const slotId of plan.slotIds) {
+      const slot = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId));
+      expect(slot.exists()).toBe(false);
+    }
   });
 
   it('supports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes', async () => {
