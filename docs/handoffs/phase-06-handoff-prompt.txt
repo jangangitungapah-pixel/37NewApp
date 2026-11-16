@@ -1,0 +1,45 @@
+CONTEXT HANDOFF — 37MusicStudio Rebuild
+Target Phase: Phase 06 — Gallery & Cloudinary
+Repository: c:\Users\hazel\source\repos\37NewApp (branch: main)
+Baseline Prerequisites:
+- Read README.md, docs/checkpoints/phase-01-checkpoint.md through docs/checkpoints/phase-05-checkpoint.md, and Section 09 ("Gallery / Cloudinary"), Section 10 (`galleryAssets`), Section 13 ("Cloudinary limitations"), and Section 15 ("Cross-portal and Gallery") of C:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html BEFORE editing code.
+- Firebase Target Project: musicstudio37app (Database ID: "(default)", Edition: STANDARD, Spark plan only — no Cloud Functions, no Blaze, no Cloud Storage, no external backend). NEVER touch existing Firebase projects or run `firebase deploy` unless explicitly requested by the user.
+- CRITICAL SECURITY RULE: NEVER put `CLOUDINARY_API_SECRET` anywhere in `src/`, `.env*`, client bundle `dist/`, Git, or docs. Only public unsigned upload parameters (`VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET`) are used on the client!
+
+WHAT WAS COMPLETED IN PHASE 05 (AVAILABLE NOW):
+1. Collaboration & Notification System:
+   - `src/domain/enums/roles.js` + `src/domain/validators/notificationValidators.js`: `NOTIFICATION_TYPE`, deterministic ID builder `buildNotificationId`, `validateNotificationDoc`, unread counter/filter selectors.
+   - `src/data/repositories/notificationRepository.js` + `src/application/use-cases/notificationUseCases.js`: `subscribeMyNotifications` (`limit(30)`), `subscribeBusinessActivityTimeline` (Owner latest 40; Operator chunked `assignedStudioIds`), non-fatal `dispatchNotificationSafeUseCase` wired cleanly post-commit into `bookingUseCases.js`, `financeUseCases.js`, and `masterDataUseCases.js`.
+   - `src/features/notifications/NotificationCenter.jsx` mounted inside `PortalShell.jsx` topbar (accessible popover, unread badge, mark-read/all-read, deep-link) and `ActivityTimelinePage.jsx` mounted at `/owner/activity` and `/operator/activity`.
+2. Security Rules & Indexes (`firestore.rules` & `firestore.indexes.json`):
+   - `notifications/{notificationId}` opened with recipient-only read, `MapDiff` `readAt`-only mark read, scoped Operator create guard, and `allow delete: if false`.
+   - `galleryAssets/{assetId}` remains strictly locked `allow read, write: if false;` ready for Phase 06!
+
+REQUIRED DELIVERABLES FOR PHASE 06 (GALLERY & CLOUDINARY):
+1. Environment Config & Cloudinary Client Adapter (`src/infrastructure/cloudinary/cloudinaryClient.js`):
+   - Read public `appConfig.cloudinary.cloudName` and `appConfig.cloudinary.uploadPreset` cleanly from `src/infrastructure/config/env.js`.
+   - Implement explicit unconfigured/missing-config state (do NOT crash the page or break Owner/Operator portals if `VITE_CLOUDINARY_CLOUD_NAME` / `VITE_CLOUDINARY_UPLOAD_PRESET` are still blank in `.env.local`; show clear setup instructions card when unconfigured, AND upload cleanly when configured!).
+   - Client-side pre-upload validation (UX guardrail, NOT security boundary): MIME allowlist (`image/jpeg`, `image/png`, `image/webp`), max file size (e.g. `<= 5 MB` or `10 MB`), dimension inspection (`Image()` decode check), local object-URL cleanup (`URL.revokeObjectURL`) to prevent memory leaks!
+   - Upload adapter (`uploadImageToCloudinary`) via HTTPS `POST https://api.cloudinary.com/v1_1/${cloudName}/image/upload` with `FormData` (`file`, `upload_preset`), optional non-empty `folder`, returning ONLY normalized metadata (`publicId`, `secureUrl`, `format`, `width`, `height`, `bytes`), plus CDN URL helper `buildCloudinaryImageUrl({ cloudName, publicId, secureUrl, width, quality, format })` for responsive thumbnails (`f_auto,q_auto,w_...`)!
+2. Gallery Domain Validator, Repository & Partial-Failure Recovery (`src/domain/`, `src/data/`, `src/application/`):
+   - Enum & Schema (`GALLERY_ASSET_STATUS = { ACTIVE: 'active', ARCHIVED: 'archived' }`, `SCHEMA_VERSIONS.GALLERY_ASSET = 1`).
+   - `validateGalleryAssetDoc`: validates `assetId`, `businessId`, optional `studioId` (`null` or valid studio), `publicId`, `secureUrl` (MUST match `https://res.cloudinary.com/...`), `format` in `['jpg', 'jpeg', 'png', 'webp']`, integer `width`, `height`, `bytes` (> 0), `caption`, `altText`, `order` (int >= 0), `status` (`active | archived`), `uploadedBy`, `uploadedAt` / `createdAt`, `updatedAt`, `updatedBy`, `schemaVersion`.
+   - **Critical Orphan Recovery Flow (Master Prompt Section 09)**:
+     - If Cloudinary upload succeeds (`publicId`, `secureUrl` received) BUT subsequent Firestore metadata save fails (e.g., network drop / permission issue / offline), DO NOT discard the Cloudinary result or claim success! Retain the pending Cloudinary upload metadata in React component/UI recovery banner ("Upload gambar ke Cloudinary berhasil, tetapi penyimpanan metadata Firestore gagal — Coba Simpan Ulang Metadata / Salin Public ID untuk Cleanup Manual di Cloudinary Console").
+   - Implement `galleryUseCases.js` & `galleryRepository.js`:
+     - Soft delete / archive ONLY (`status: 'archived'`, no client Cloudinary Admin API permanent deletion because API Secret is forbidden on client!). Show clear Owner guidance for manual permanent asset deletion in Cloudinary Console.
+     - Owner full Gallery upload, edit caption/altText/order, and archive; Operator access strictly governed by explicit `permissions.canManageGallery == true` (check `hasMemberPermission(member, 'canManageGallery')` and `canAccessStudio` if scoped to studioId!).
+3. Firestore Security Rules & Composite Indexes (`firestore.rules`, `firestore.indexes.json`):
+   - Unlock `businesses/{businessId}/galleryAssets/{assetId}`:
+     - `allow get, list`: active business members can read (`hasActiveMembership(businessId)`, e.g. viewing active/archived gallery appropriately cleanly scoped).
+     - `allow create`: `canManageGallery(businessId)` (Owner OR Operator with `permissions.canManageGallery == true`), strict field allowlist, `status == 'active'`, valid `https://res.cloudinary.com/` URL prefix check, integer `width/height/bytes > 0`, `createdBy == request.auth.uid`, `createdAt == request.time`.
+     - `allow update`: `canManageGallery(businessId)` (`MapDiff` immutable `assetId`, `businessId`, `publicId`, `secureUrl`, `format`, `width`, `height`, `bytes`, `createdAt`, `createdBy`), Operator cannot archive unless Owner (or enforce `isOwner(businessId)` for archiving if stricter — check `Master Prompt` matrix cleanly!).
+     - `allow delete: if false;` (no hard delete!).
+   - Add composite index for `galleryAssets`: `[status ASC, order ASC, createdAt DESC]`, `[studioId ASC, status ASC, order ASC]`.
+4. Gallery UI & Portal Navigation (`src/features/gallery/`):
+   - Responsive Grid Gallery page mounted at `/owner/gallery` (`Studio Gallery`) and `/operator/gallery` (accessible to all operators for active studio assets read-only if `canManageGallery: false`, upload enabled if `canManageGallery: true` — or clean permission-aware toolbar!), showing CDN-optimized WebP/responsive thumbnails, Active vs Archived toggle (Owner), upload preview + orphan recovery banner, caption/altText edit modal, archive flow, and transparent Spark/Cloudinary limitation notes.
+5. Verification & Gate Before Stopping at End of Phase 06:
+   - Unit tests: Cloudinary URL transformation builder, image metadata validator, missing-config/mime/size error checks, permission checks, partial-failure state handling.
+   - Firestore Emulator Rules tests (`npm run test:rules`): unauthorized Operator blocked from upload/archive when `canManageGallery == false`, immutable binary metadata fields protected, invalid non-Cloudinary URL rejected, `allow delete: if false`.
+   - `npm run lint`, `npm run test:unit`, `npm run test:rules`, `npm run build` all pass cleanly + zero `CLOUDINARY_API_SECRET` anywhere in repo or `dist/`.
+   - Timestamped verification `.txt` log in `logs/`, git commit on `main`, `README.md`, `docs/checkpoints/phase-06-checkpoint.md`, `docs/handoffs/phase-07-handoff-prompt.txt`, then STOP before Phase 07.

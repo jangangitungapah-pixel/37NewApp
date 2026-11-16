@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Disc3, LogOut, Menu, X } from 'lucide-react';
 import { useAuthSession } from '../providers/authSessionContext.js';
+import { NotificationCenter } from '../../features/notifications/NotificationCenter.jsx';
 import { ConnectionBanner, StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 
 /**
@@ -105,7 +106,10 @@ export function PortalShell({ portalLabel, portalBadgeVariant = 'warning', navIt
             </button>
             <span className={`badge badge-${portalBadgeVariant}`}>{portalLabel}</span>
           </div>
-          <span className="badge">{isOnline ? 'Online' : 'Offline'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <NotificationCenter />
+            <span className="badge">{isOnline ? 'Online' : 'Offline'}</span>
+          </div>
         </header>
 
         <main className="portal-content">

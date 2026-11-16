@@ -706,6 +706,81 @@ code,
   }
 }
 
+/* Phase 05 Cross-Portal Notifications & Activity Timeline */
+.notif-wrapper {
+  position: relative;
+}
+
+.notif-bell-btn {
+  position: relative;
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+.notif-badge-pill {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-brass);
+  color: var(--text-inverse);
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 370px;
+  max-width: calc(100vw - 24px);
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-overlay);
+  z-index: 50;
+  overflow: hidden;
+}
+
+@media (max-width: 560px) {
+  .notif-popover {
+    position: fixed;
+    top: 62px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+.notif-item {
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.notif-item:hover {
+  background: var(--bg-surface);
+}
+
+.notif-item.unread {
+  background: rgba(245, 184, 100, 0.08);
+  border-left: 3px solid var(--accent-brass);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

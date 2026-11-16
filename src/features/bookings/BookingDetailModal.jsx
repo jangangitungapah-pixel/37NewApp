@@ -50,6 +50,7 @@ export function BookingDetailModal({
   booking,
   onClose,
   member,
+  business = null,
   isOnline,
   studios,
   services,
@@ -185,6 +186,7 @@ export function BookingDetailModal({
         booking,
         targetStatus,
         reason: requiredReason,
+        businessOwnerUid: business?.ownerUid || null,
         isOnline,
       });
       onMutated?.(`Status booking diperbarui menjadi ${targetStatus}.`, updated);
@@ -213,6 +215,7 @@ export function BookingDetailModal({
         scheduleSetting,
         commissionSetting,
         bookingPolicySetting,
+        businessOwnerUid: business?.ownerUid || null,
         isOnline,
       });
       onMutated?.(

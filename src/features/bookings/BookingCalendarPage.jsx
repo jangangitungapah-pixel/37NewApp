@@ -683,6 +683,7 @@ export function BookingCalendarPage() {
             booking={selectedBooking}
             onClose={() => setSelectedBookingId(null)}
             member={member}
+            business={business}
             isOnline={isOnline}
             studios={accessibleStudios}
             services={services}

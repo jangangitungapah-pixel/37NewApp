@@ -229,9 +229,10 @@ describe('Phase 01 Firestore Security Rules (Deny-by-Default)', () => {
     );
     await assertFails(getDoc(doc(operatorDb, 'businesses', BIZ_ID)));
 
-    // Unauthenticated/outsider bookings & ledger stay blocked; Phase 05+ collections remain locked even for Owner
+    // Unauthenticated/outsider bookings/ledger/notifications stay blocked; Phase 06+ gallery remains locked even for Owner
     await assertFails(getDoc(doc(outsiderDb, 'businesses', BIZ_ID, 'bookings', 'b-1')));
     await assertFails(getDoc(doc(outsiderDb, 'businesses', BIZ_ID, 'ledgerEntries', 'l-1')));
-    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'notifications', 'n-1')));
+    await assertFails(getDoc(doc(outsiderDb, 'businesses', BIZ_ID, 'notifications', 'n-1')));
+    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'galleryAssets', 'g-1')));
   });
 });

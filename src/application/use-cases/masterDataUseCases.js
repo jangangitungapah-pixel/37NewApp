@@ -1,9 +1,11 @@
 import {
   CUSTOMER_STATUS,
   MEMBER_STATUS,
+  NOTIFICATION_TYPE,
   ROLES,
   STUDIO_STATUS,
 } from '../../domain/enums/roles.js';
+import { dispatchNotificationSafeUseCase } from './notificationUseCases.js';
 import {
   canArchiveCustomers,
   canManageCustomers,
@@ -279,10 +281,28 @@ export async function saveTeamMemberUseCase({
     });
   }
 
-  return upsertBusinessMemberDoc({
+  const saved = await upsertBusinessMemberDoc({
     businessId: member.businessId,
     actorUid: member.uid,
     data,
     existingMember: existingTargetMember,
   });
+
+  if (targetUid !== member.uid && saved.status === MEMBER_STATUS.ACTIVE) {
+    await dispatchNotificationSafeUseCase({
+      member,
+      recipientUids: [targetUid],
+      studioId: null,
+      eventId: `team__${targetUid}__${Date.now()}`,
+      type: NOTIFICATION_TYPE.TEAM_ASSIGNMENT_UPDATED,
+      entityType: 'member',
+      entityId: targetUid,
+      title: 'Penugasan Studio / Akses Diperbarui',
+      message: `Owner memperbarui akses Anda (${saved.role}, ${saved.assignedStudioIds?.length || 0} studio ditugaskan).`,
+      actionPath: saved.role === ROLES.OWNER ? '/owner/profile' : '/operator/studios',
+      isOnline,
+    });
+  }
+
+  return saved;
 }

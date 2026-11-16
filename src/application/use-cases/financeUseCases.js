@@ -1,3 +1,4 @@
+import { NOTIFICATION_TYPE } from '../../domain/enums/roles.js';
 import {
   canSettleBookings,
   canViewBusinessLedger,
@@ -10,6 +11,7 @@ import {
   requestSettlementReviewTransaction,
   settleBookingTransaction,
 } from '../../data/repositories/financeRepository.js';
+import { dispatchNotificationSafeUseCase } from './notificationUseCases.js';
 
 function assertOnlineForFinance(isOnline) {
   if (isOnline === false) {
@@ -45,7 +47,7 @@ export async function settleBookingUseCase({
   assertOnlineForFinance(isOnline);
   assertOwnerSettlementAuthority(member, 'melakukan final settlement booking');
 
-  return settleBookingTransaction({
+  const result = await settleBookingTransaction({
     businessId: member.businessId,
     bookingId,
     paymentMethod,
@@ -55,6 +57,27 @@ export async function settleBookingUseCase({
     actorUid: member.uid,
     actorRole: member.role,
   });
+
+  if (!result.idempotentReplay && result.booking) {
+    const targetOpUid = result.commissionEntry?.operatorUid || result.booking.operatorUid || '';
+    if (targetOpUid) {
+      await dispatchNotificationSafeUseCase({
+        member,
+        recipientUids: [targetOpUid],
+        studioId: result.booking.studioId,
+        eventId: `booking.settled__${bookingId}`,
+        type: NOTIFICATION_TYPE.BOOKING_SETTLED,
+        entityType: 'settlement',
+        entityId: bookingId,
+        title: 'Settlement & Komisi Selesai',
+        message: `Booking ${result.booking.customerSnapshot?.name || bookingId} (${result.booking.dateKey}) telah di-settle oleh Owner.`,
+        actionPath: '/operator/commissions',
+        isOnline,
+      });
+    }
+  }
+
+  return result;
 }
 
 export async function requestSettlementReviewUseCase({
@@ -66,13 +89,32 @@ export async function requestSettlementReviewUseCase({
   assertOnlineForFinance(isOnline);
   assertOwnerSettlementAuthority(member, 'menandai booking untuk review settlement');
 
-  return requestSettlementReviewTransaction({
+  const updated = await requestSettlementReviewTransaction({
     businessId: member.businessId,
     bookingId,
     reviewReason,
     actorUid: member.uid,
     actorRole: member.role,
   });
+
+  const targetOpUid = updated?.operatorUid || updated?.createdBy || '';
+  if (targetOpUid) {
+    await dispatchNotificationSafeUseCase({
+      member,
+      recipientUids: [targetOpUid],
+      studioId: updated.studioId,
+      eventId: `booking.settlement_review__${bookingId}`,
+      type: NOTIFICATION_TYPE.SETTLEMENT_REVIEW_REQUIRED,
+      entityType: 'settlement',
+      entityId: bookingId,
+      title: 'Perlu Review Settlement',
+      message: `Booking ${updated.customerSnapshot?.name || bookingId}: ${reviewReason}.`,
+      actionPath: '/operator/bookings',
+      isOnline,
+    });
+  }
+
+  return updated;
 }
 
 export async function recordLedgerAdjustmentUseCase({

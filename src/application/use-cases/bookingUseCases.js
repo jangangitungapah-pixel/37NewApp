@@ -1,5 +1,6 @@
 import {
   BOOKING_STATUS,
+  NOTIFICATION_TYPE,
   ROLES,
 } from '../../domain/enums/roles.js';
 import {
@@ -23,6 +24,15 @@ import {
   rescheduleBookingTransaction,
   transitionBookingStatusTransaction,
 } from '../../data/repositories/bookingRepository.js';
+import { dispatchNotificationSafeUseCase } from './notificationUseCases.js';
+
+function resolveCrossPortalTargets({ member, businessOwnerUid, booking }) {
+  if (member?.role === ROLES.OPERATOR) {
+    return businessOwnerUid ? [businessOwnerUid] : [];
+  }
+  const staffUid = booking?.operatorUid || booking?.createdBy || '';
+  return staffUid ? [staffUid] : [];
+}
 
 function assertOnline(isOnline) {
   if (isOnline === false) {
@@ -66,6 +76,7 @@ export async function createBookingUseCase({
   pricingSetting = null,
   commissionSetting = null,
   bookingPolicySetting = null,
+  businessOwnerUid = null,
   isOnline = true,
   referenceNow = new Date(),
   allowPastForTest = false,
@@ -105,13 +116,34 @@ export async function createBookingUseCase({
     allowPastForTest,
   });
 
-  return createBookingTransaction({
+  const created = await createBookingTransaction({
     businessId: member.businessId,
     booking,
     slotPlan,
     actorUid: member.uid,
     actorRole: member.role,
   });
+
+  const recipients = resolveCrossPortalTargets({
+    member,
+    businessOwnerUid,
+    booking: created,
+  });
+  await dispatchNotificationSafeUseCase({
+    member,
+    recipientUids: recipients,
+    studioId: created.studioId,
+    eventId: `booking.created__${created.bookingId}`,
+    type: NOTIFICATION_TYPE.BOOKING_CREATED,
+    entityType: 'booking',
+    entityId: created.bookingId,
+    title: 'Booking Studio Baru',
+    message: `${created.customerSnapshot?.name} · ${created.studioSnapshot?.name} (${created.dateKey} ${created.startTime}–${created.endTime}).`,
+    actionPath: member.role === ROLES.OPERATOR ? '/owner/bookings' : '/operator/bookings',
+    isOnline,
+  });
+
+  return created;
 }
 
 /**
@@ -123,6 +155,7 @@ export async function transitionBookingStatusUseCase({
   booking,
   targetStatus,
   reason = null,
+  businessOwnerUid = null,
   isOnline = true,
 }) {
   assertOnline(isOnline);
@@ -140,7 +173,7 @@ export async function transitionBookingStatusUseCase({
     }
   }
 
-  return transitionBookingStatusTransaction({
+  const updated = await transitionBookingStatusTransaction({
     businessId: member.businessId,
     bookingId: booking.bookingId,
     targetStatus,
@@ -148,6 +181,46 @@ export async function transitionBookingStatusUseCase({
     actorUid: member.uid,
     actorRole: member.role,
   });
+
+  const typeByStatus = {
+    [BOOKING_STATUS.CONFIRMED]: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
+    [BOOKING_STATUS.IN_PROGRESS]: NOTIFICATION_TYPE.BOOKING_STARTED,
+    [BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT]: NOTIFICATION_TYPE.BOOKING_COMPLETED,
+    [BOOKING_STATUS.CANCELLED]: NOTIFICATION_TYPE.BOOKING_CANCELLED,
+    [BOOKING_STATUS.NO_SHOW]: NOTIFICATION_TYPE.BOOKING_CANCELLED,
+  };
+  const notifType = typeByStatus[targetStatus];
+  if (notifType) {
+    const recipients = resolveCrossPortalTargets({
+      member,
+      businessOwnerUid,
+      booking,
+    });
+    const isCompletedForOwner =
+      member.role === ROLES.OPERATOR &&
+      targetStatus === BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT;
+    await dispatchNotificationSafeUseCase({
+      member,
+      recipientUids: recipients,
+      studioId: booking.studioId,
+      eventId: `${notifType.toLowerCase()}__${booking.bookingId}`,
+      type: notifType,
+      entityType: 'booking',
+      entityId: booking.bookingId,
+      title: isCompletedForOwner
+        ? 'Sesi Selesai — Siap Settlement'
+        : `Booking ${targetStatus}`,
+      message: `${booking.customerSnapshot?.name || booking.bookingId} (${booking.dateKey} ${booking.startTime}) berubah menjadi ${targetStatus}.`,
+      actionPath: isCompletedForOwner
+        ? '/owner/finance'
+        : member.role === ROLES.OPERATOR
+          ? '/owner/bookings'
+          : '/operator/bookings',
+      isOnline,
+    });
+  }
+
+  return updated;
 }
 
 /**
@@ -166,6 +239,7 @@ export async function rescheduleBookingUseCase({
   scheduleSetting = null,
   commissionSetting = null,
   bookingPolicySetting = null,
+  businessOwnerUid = null,
   isOnline = true,
   referenceNow = new Date(),
   allowPastForTest = false,
@@ -243,7 +317,7 @@ export async function rescheduleBookingUseCase({
     };
   }
 
-  return rescheduleBookingTransaction({
+  const updated = await rescheduleBookingTransaction({
     businessId: member.businessId,
     bookingId: booking.bookingId,
     newSlotPlan,
@@ -253,6 +327,27 @@ export async function rescheduleBookingUseCase({
     actorUid: member.uid,
     actorRole: member.role,
   });
+
+  const recipients = resolveCrossPortalTargets({
+    member,
+    businessOwnerUid,
+    booking,
+  });
+  await dispatchNotificationSafeUseCase({
+    member,
+    recipientUids: recipients,
+    studioId: booking.studioId,
+    eventId: `booking.rescheduled__${booking.bookingId}__r${updated.rescheduleCount}`,
+    type: NOTIFICATION_TYPE.BOOKING_RESCHEDULED,
+    entityType: 'booking',
+    entityId: booking.bookingId,
+    title: 'Booking Di-reschedule',
+    message: `${booking.customerSnapshot?.name || booking.bookingId} dipindah ke ${updated.dateKey} ${updated.startTime}–${updated.endTime}.`,
+    actionPath: member.role === ROLES.OPERATOR ? '/owner/bookings' : '/operator/bookings',
+    isOnline,
+  });
+
+  return updated;
 }
 
 export { BOOKING_STATUS };

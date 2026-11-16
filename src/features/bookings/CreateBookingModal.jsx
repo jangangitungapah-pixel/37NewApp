@@ -312,6 +312,7 @@ export function CreateBookingModal({
         pricingSetting,
         commissionSetting,
         bookingPolicySetting,
+        businessOwnerUid: business?.ownerUid || null,
         isOnline,
       });
       onCreated?.(created);

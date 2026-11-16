@@ -577,6 +577,31 @@ service cloud.firestore {
         && data.schemaVersion is int && data.schemaVersion >= 1;
     }
 
+    function isValidNotificationData(data, businessId, notificationId) {
+      return data.keys().hasOnly([
+          'notificationId', 'businessId', 'studioId', 'recipientUid', 'eventId',
+          'type', 'channel', 'entityType', 'entityId', 'title', 'message',
+          'actionPath', 'readAt', 'createdBy', 'createdAt', 'schemaVersion'
+        ])
+        && data.notificationId == notificationId
+        && data.businessId == businessId
+        && isValidNullableString(data, 'studioId', 128)
+        && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid != '*'
+        && data.eventId is string && data.eventId.size() >= 1
+        && data.type in [
+          'BOOKING_CREATED', 'BOOKING_CONFIRMED', 'BOOKING_STARTED',
+          'BOOKING_COMPLETED', 'BOOKING_CANCELLED', 'BOOKING_RESCHEDULED',
+          'BOOKING_SETTLED', 'SETTLEMENT_REVIEW_REQUIRED', 'TEAM_ASSIGNMENT_UPDATED'
+        ]
+        && data.channel == 'in_app'
+        && data.entityType in ['booking', 'settlement', 'member']
+        && data.entityId is string && data.entityId.size() >= 1
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 300
+        && isValidNullableString(data, 'actionPath', 160)
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
     // -------------------------------------------------------------------------
     // Global user profile (must NEVER contain role/permission/business access)
     // -------------------------------------------------------------------------
@@ -1023,10 +1048,43 @@ service cloud.firestore {
       }
 
       // -----------------------------------------------------------------------
-      // Phase 05+ Subcollections remain explicitly denied by default
+      // Phase 05: Scoped In-App Notifications
+      // -----------------------------------------------------------------------
+      match /notifications/{notificationId} {
+        allow get, list: if hasActiveMembership(businessId)
+          && resource != null
+          && resource.data.recipientUid == request.auth.uid;
+
+        allow create: if isValidNotificationData(request.resource.data, businessId, notificationId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.readAt == null
+          && exists(memberPath(businessId, request.resource.data.recipientUid))
+          && (
+            isOwner(businessId)
+            || (
+              hasActiveMembership(businessId)
+              && request.resource.data.studioId != null
+              && request.resource.data.studioId in currentMember(businessId).assignedStudioIds
+              && request.resource.data.type in [
+                'BOOKING_CREATED', 'BOOKING_CONFIRMED', 'BOOKING_STARTED',
+                'BOOKING_COMPLETED', 'BOOKING_CANCELLED', 'BOOKING_RESCHEDULED'
+              ]
+            )
+          );
+
+        allow update: if hasActiveMembership(businessId)
+          && resource.data.recipientUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 06+ Subcollections remain explicitly denied by default
       // -----------------------------------------------------------------------
       match /galleryAssets/{assetId} { allow read, write: if false; }
-      match /notifications/{notificationId} { allow read, write: if false; }
     }
 
     // Default deny fallback for every other path

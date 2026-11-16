@@ -1,4 +1,5 @@
 import {
+  Activity,
   BadgeCheck,
   Calendar,
   DoorOpen,
@@ -14,6 +15,7 @@ export const OWNER_NAV_ITEMS = [
   { to: '/owner', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/owner/bookings', label: 'Bookings & Calendar', icon: Calendar, end: false },
   { to: '/owner/finance', label: 'Settlement & Finance', icon: BadgeCheck, end: false },
+  { to: '/owner/activity', label: 'Activity & Alerts', icon: Activity, end: false },
   { to: '/owner/studios', label: 'Studios & Rooms', icon: DoorOpen, end: false },
   { to: '/owner/services', label: 'Services & Pricing', icon: Layers, end: false },
   { to: '/owner/customers', label: 'Customers', icon: Users, end: false },

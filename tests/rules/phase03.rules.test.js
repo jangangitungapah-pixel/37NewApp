@@ -502,13 +502,12 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
       }),
     );
 
-    // Hard delete / log overwrite denied; Operator cannot read ledger; Phase 05+ collections stay locked
+    // Hard delete / log overwrite denied; Operator cannot read ledger; Phase 06+ collections stay locked
     await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm')));
     await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm'), { summary: 'Tampered' }));
     await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm')));
     await assertFails(getDoc(doc(opADb, 'businesses', BIZ_ID, 'ledgerEntries', 'led-1')));
     await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'galleryAssets', 'gal-1')));
-    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'notifications', 'notif-1')));
   });
 
   it('prevents concurrent race double-booking across two simultaneous clients and executes partial-overlap atomic reschedule', async () => {
