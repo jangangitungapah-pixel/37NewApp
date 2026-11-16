@@ -61,7 +61,7 @@ service cloud.firestore {
         && getAfter(bookingOperationPath(businessId, operationId)).data.payloadHash == data.get('lastOperationPayloadHash', null);
     }
 
-    function hasMatchingBookingSessionEventAfter(businessId, bookingId, studioId, data) {
+    function hasMatchingBookingSessionEventAfter(businessId, bookingId, studioId, data, fromStatus) {
       let eventId = data.get('lastSessionEventId', null);
       return eventId is string
         && existsAfter(bookingSessionEventPath(businessId, eventId))
@@ -71,6 +71,7 @@ service cloud.firestore {
         && getAfter(bookingSessionEventPath(businessId, eventId)).data.bookingId == bookingId
         && getAfter(bookingSessionEventPath(businessId, eventId)).data.studioId == studioId
         && getAfter(bookingSessionEventPath(businessId, eventId)).data.action == data.get('lastSessionEventType', null)
+        && getAfter(bookingSessionEventPath(businessId, eventId)).data.fromStatus == fromStatus
         && getAfter(bookingSessionEventPath(businessId, eventId)).data.toStatus == data.sessionStatus
         && getAfter(bookingSessionEventPath(businessId, eventId)).data.actorUid == request.auth.uid
         && getAfter(bookingSessionEventPath(businessId, eventId)).data.actorRole == currentMember(businessId).role;
@@ -551,6 +552,144 @@ service cloud.firestore {
         && data.schemaVersion is int && data.schemaVersion >= 1;
     }
 
+    function isValidBookingSessionUpdate(businessId, bookingId, oldData, newData) {
+      let fromSessionStatus = oldData.get(
+        'sessionStatus',
+        oldData.status == 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING'
+      );
+      return canOperateStudioBooking(businessId, oldData.studioId)
+        && newData.updatedBy == request.auth.uid
+        && newData.updatedAt == request.time
+        && newData.lastOperationType == 'booking.session'
+        && newData.lastOperationId == newData.lastSessionEventId
+        && newData.lastOperationPayloadHash is string
+        && newData.lastSessionEventAt == request.time
+        && hasMatchingBookingOperationAfter(
+          businessId, bookingId, oldData.studioId, newData, 'booking.session'
+        )
+        && hasMatchingBookingSessionEventAfter(
+          businessId, bookingId, oldData.studioId, newData, fromSessionStatus
+        )
+        && (
+          (
+            newData.lastSessionEventType == 'check_in'
+            && oldData.status == 'CONFIRMED'
+            && fromSessionStatus == 'UPCOMING'
+            && newData.status == oldData.status
+            && newData.sessionStatus == 'UPCOMING'
+            && oldData.get('checkedInAt', null) == null
+            && newData.checkedInAt == request.time
+            && newData.checkedInByUid == request.auth.uid
+            && newData.checkedInByName is string
+            && newData.diff(oldData).affectedKeys().hasOnly([
+              'sessionStatus', 'checkedInAt', 'checkedInByUid', 'checkedInByName',
+              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash',
+              'updatedBy', 'updatedAt'
+            ])
+          )
+          || (
+            newData.lastSessionEventType == 'start'
+            && oldData.status == 'CONFIRMED'
+            && fromSessionStatus == 'UPCOMING'
+            && newData.status == oldData.status
+            && newData.sessionStatus == 'IN_PROGRESS'
+            && oldData.get('actualStartAt', null) == null
+            && newData.actualStartAt == request.time
+            && newData.actualStartByUid == request.auth.uid
+            && newData.actualStartByName is string
+            && newData.diff(oldData).affectedKeys().hasOnly([
+              'sessionStatus', 'actualStartAt', 'actualStartByUid', 'actualStartByName',
+              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash',
+              'updatedBy', 'updatedAt'
+            ])
+          )
+          || (
+            newData.lastSessionEventType == 'complete'
+            && oldData.status == 'CONFIRMED'
+            && fromSessionStatus == 'IN_PROGRESS'
+            && oldData.get('actualStartAt', null) is timestamp
+            && request.time >= oldData.actualStartAt
+            && newData.status == 'COMPLETED_PENDING_SETTLEMENT'
+            && newData.sessionStatus == 'COMPLETED'
+            && newData.actualEndAt == request.time
+            && newData.actualEndByUid == request.auth.uid
+            && newData.actualEndByName is string
+            && newData.completedAt == request.time
+            && newData.actualDurationMinutes is int
+            && newData.actualDurationMinutes == math.floor(
+              (request.time.toMillis() - oldData.actualStartAt.toMillis()) / 60000
+            )
+            && newData.diff(oldData).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'actualEndAt', 'actualEndByUid', 'actualEndByName',
+              'actualDurationMinutes', 'completedAt',
+              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash',
+              'updatedBy', 'updatedAt'
+            ])
+          )
+          || (
+            newData.lastSessionEventType == 'no_show'
+            && oldData.status == 'CONFIRMED'
+            && fromSessionStatus == 'UPCOMING'
+            && oldData.get('checkedInAt', null) == null
+            && oldData.startAt is timestamp
+            && request.time >= oldData.startAt + duration.value(15, 'm')
+            && newData.status == 'NO_SHOW'
+            && newData.sessionStatus == 'NO_SHOW'
+            && newData.noShowAt == request.time
+            && newData.noShowByUid == request.auth.uid
+            && newData.noShowByName is string
+            && newData.noShowReason is string
+            && newData.noShowReason.size() >= 4
+            && newData.diff(oldData).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'noShowAt', 'noShowByUid', 'noShowByName', 'noShowReason',
+              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash',
+              'updatedBy', 'updatedAt'
+            ])
+          )
+          || (
+            newData.lastSessionEventType == 'cancel'
+            && oldData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && fromSessionStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
+            && newData.status == 'CANCELLED'
+            && newData.sessionStatus == 'CANCELLED'
+            && newData.cancelReason is string
+            && newData.cancelReason.size() >= 3
+            && newData.cancelledBy == request.auth.uid
+            && newData.cancelledAt == request.time
+            && newData.get('actualStartAt', null) == oldData.get('actualStartAt', null)
+            && newData.get('actualStartByUid', null) == oldData.get('actualStartByUid', null)
+            && newData.get('actualStartByName', null) == oldData.get('actualStartByName', null)
+            && newData.diff(oldData).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'cancelReason', 'cancelledBy', 'cancelledAt',
+              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash',
+              'updatedBy', 'updatedAt'
+            ])
+          )
+          || (
+            newData.lastSessionEventType == 'reject'
+            && oldData.status == 'PENDING_CONFIRMATION'
+            && fromSessionStatus == 'PENDING'
+            && newData.status == 'REJECTED'
+            && newData.sessionStatus == 'CANCELLED'
+            && newData.cancelReason is string
+            && newData.cancelReason.size() >= 3
+            && newData.cancelledBy == request.auth.uid
+            && newData.cancelledAt == request.time
+            && newData.diff(oldData).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'cancelReason', 'cancelledBy', 'cancelledAt',
+              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash',
+              'updatedBy', 'updatedAt'
+            ])
+          )
+        );
+    }
+
     function isValidBookingSlotData(data, businessId, slotId) {
       return data.keys().hasOnly([
           'slotId', 'businessId', 'studioId', 'dateKey', 'bucketIndex', 'slotTime',
@@ -984,10 +1123,14 @@ service cloud.firestore {
             )
           );
 
-        allow update: if request.resource.data.updatedBy == request.auth.uid
-          && request.resource.data.updatedAt == request.time
-          && (
-            // 1. Operational lifecycle transition (keeps pricing/slot snapshots untouched)
+        allow update: if isValidBookingSessionUpdate(
+            businessId, bookingId, resource.data, request.resource.data
+          )
+          || (
+            request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && (
+            // 1. Legacy operational lifecycle transition (kept only for pre-session records)
             (
               canOperateStudioBooking(businessId, resource.data.studioId)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -1004,8 +1147,27 @@ service cloud.firestore {
               )
               && (
                 (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
-                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
-                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+                || (
+                  resource.data.status == 'CONFIRMED'
+                  && !('sessionStatus' in resource.data)
+                  && request.resource.data.status == 'IN_PROGRESS'
+                )
+                || (
+                  resource.data.status == 'CONFIRMED'
+                  && request.resource.data.status == 'CANCELLED'
+                )
+                || (
+                  resource.data.status == 'CONFIRMED'
+                  && request.resource.data.status == 'NO_SHOW'
+                  && resource.data.get('checkedInAt', null) == null
+                  && request.resource.data.cancelReason is string
+                  && request.resource.data.cancelReason.size() >= 3
+                  && request.time >= resource.data.startAt + duration.value(15, 'm')
+                )
+                || (
+                  resource.data.status == 'IN_PROGRESS'
+                  && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED']
+                )
               )
             )
             // 2. Atomic reschedule (preserving lifecycle status & increments rescheduleCount)
