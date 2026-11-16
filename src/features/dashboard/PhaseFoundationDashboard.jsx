@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Clock,
   Database,
-  Lock,
   ShieldCheck,
 } from 'lucide-react';
 import { useAuthSession } from '../../app/providers/authSessionContext.js';
@@ -16,8 +15,8 @@ const ROADMAP_PHASES = [
   { phase: '03', name: 'Booking Engine & Deterministic Slot Calendar', state: 'active' },
   { phase: '04', name: 'Session, Settlement, Immutable Ledger & Commission', state: 'active' },
   { phase: '05', name: 'Portal Collaboration, Activity Log & Notifications', state: 'active' },
-  { phase: '06', name: 'Gallery & Cloudinary Restricted Unsigned Upload', state: 'next' },
-  { phase: '07', name: 'Dashboard Analytics & Spark-Safe Reports', state: 'planned' },
+  { phase: '06', name: 'Gallery & Cloudinary Restricted Unsigned Upload', state: 'active' },
+  { phase: '07', name: 'Dashboard Analytics & Spark-Safe Reports', state: 'next' },
   { phase: '08', name: 'Hardening, Accessibility & Production Readiness', state: 'planned' },
 ];
 
@@ -30,6 +29,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
         { to: '/owner/bookings', label: 'Bookings & Calendar' },
         { to: '/owner/finance', label: 'Settlement & Finance' },
         { to: '/owner/activity', label: 'Activity & Alerts' },
+        { to: '/owner/gallery', label: 'Gallery & Media' },
         { to: '/owner/studios', label: 'Studios & Rooms' },
         { to: '/owner/services', label: 'Services & Pricing' },
         { to: '/owner/customers', label: 'Customers' },
@@ -40,6 +40,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
         { to: '/operator/bookings', label: 'Kalender & Booking' },
         { to: '/operator/commissions', label: 'Komisi Saya' },
         { to: '/operator/activity', label: 'Aktivitas Studio' },
+        { to: '/operator/gallery', label: 'Galeri Studio' },
         { to: '/operator/studios', label: 'Studio Ditugaskan' },
         { to: '/operator/services', label: 'Layanan & Tarif' },
         { to: '/operator/customers', label: 'Customers' },
@@ -51,7 +52,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <span className="badge badge-success">
             <ShieldCheck size={14} aria-hidden="true" />
-            <span>Phase 05 Notifications & Collaboration Active</span>
+            <span>Phase 06 Gallery &amp; Cloudinary Active</span>
           </span>
           <span className="badge badge-info">
             <Database size={14} aria-hidden="true" />
@@ -61,12 +62,12 @@ export function PhaseFoundationDashboard({ portalRole }) {
           </span>
         </div>
         <h1 style={{ margin: 0, fontSize: '26px', lineHeight: 1.2 }}>
-          {isOwner ? 'Owner Portal — Master Data & Kendali Bisnis' : 'Operator Portal — Ruang Kerja Ter-Scope'}
+          {isOwner ? 'Owner Portal — Kendali Bisnis & Operasional Studio' : 'Operator Portal — Ruang Kerja Ter-Scope'}
         </h1>
         <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '14px' }}>
           {isOwner
-            ? 'Kelola master data bisnis (studio, layanan, tarif IDR, kebijakan komisi, customer, dan akses tim). Modul booking & settlement dibuka bertahap pada Phase 03–04.'
-            : 'Portal Operator menampilkan studio yang ditugaskan (`assignedStudioIds`), katalog layanan/tarif aktif, dan operasional customer sesuai izin.'}
+            ? 'Kelola studio, layanan, booking, settlement ledger, aktivitas kolaborasi, akses tim, serta galeri Cloudinary studio dalam satu portal.'
+            : 'Portal Operator menampilkan studio yang ditugaskan (`assignedStudioIds`), kalender booking, komisi pribadi, aktivitas tim, dan galeri studio.'}
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', paddingTop: '4px' }}>
           {quickLinks.map((item) => (
@@ -117,9 +118,9 @@ export function PhaseFoundationDashboard({ portalRole }) {
       <section className="panel" style={{ display: 'grid', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <h2 style={{ margin: 0, fontSize: '18px' }}>Status Implementasi Modul (Phase Gate)</h2>
-          <span className="badge">
-            <Lock size={13} aria-hidden="true" />
-            <span>Koleksi Phase 06+ (Gallery) masih terkunci di Rules</span>
+          <span className="badge badge-success">
+            <CheckCircle2 size={13} aria-hidden="true" />
+            <span>Semua Koleksi Phase 01–06 Aktif di Security Rules</span>
           </span>
         </div>
 

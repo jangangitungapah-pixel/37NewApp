@@ -206,3 +206,22 @@ export function canViewCommissionEntry(member, entry) {
   }
   return entry.operatorUid === member.uid;
 }
+
+/**
+ * Evaluates whether a member can upload images or edit gallery metadata.
+ * @param {{ role?: string, status?: string, permissions?: Record<string, boolean> } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canManageGallery(member) {
+  return isOwnerMember(member) || hasMemberPermission(member, 'canManageGallery');
+}
+
+/**
+ * Evaluates whether a member can archive or restore gallery assets.
+ * Archiving preserves Cloudinary CDN auditability and is restricted to active Owners.
+ * @param {{ role?: string, status?: string } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canArchiveGalleryAsset(member) {
+  return isOwnerMember(member);
+}

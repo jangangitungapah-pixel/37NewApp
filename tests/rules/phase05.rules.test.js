@@ -295,10 +295,12 @@ describe('Phase 05 Firestore Security Rules (Scoped Notifications & Activity Col
     expect(opATimeline.docs).toHaveLength(1);
     await assertFails(getDocs(collection(opADb, 'businesses', BIZ_ID, 'activityLogs')));
 
-    // Phase 06+ galleryAssets MUST remain locked `if false` even for active Owner
-    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'galleryAssets', 'gal-1')));
+    // Catch-all unreleased paths remain locked even for Owner, and galleryAssets stays denied to outsiders
+    const outsiderDb = testEnv.authenticatedContext(OUTSIDER_UID).firestore();
+    await assertFails(getDoc(doc(outsiderDb, 'businesses', BIZ_ID, 'galleryAssets', 'gal-1')));
+    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'unreleasedPhaseModule', 'doc-1')));
     await assertFails(
-      setDoc(doc(ownerDb, 'businesses', BIZ_ID, 'galleryAssets', 'gal-1'), {
+      setDoc(doc(ownerDb, 'businesses', BIZ_ID, 'unreleasedPhaseModule', 'doc-1'), {
         businessId: BIZ_ID,
         createdAt: serverTimestamp(),
       }),

@@ -67,6 +67,12 @@ service cloud.firestore {
         && (m.role == 'owner' || m.get(['permissions', 'canManageCustomers'], false) == true);
     }
 
+    function canManageGallery(businessId) {
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m)
+        && (m.role == 'owner' || m.get(['permissions', 'canManageGallery'], false) == true);
+    }
+
     function canOperateStudioBooking(businessId, studioId) {
       let m = getMemberDataIfPresent(businessId);
       return isActiveMemberRecord(m)
@@ -602,6 +608,32 @@ service cloud.firestore {
         && data.schemaVersion is int && data.schemaVersion >= 1;
     }
 
+    function isValidGalleryAssetData(data, businessId, assetId) {
+      return data.keys().hasOnly([
+          'assetId', 'businessId', 'studioId', 'publicId', 'secureUrl', 'format',
+          'width', 'height', 'bytes', 'caption', 'altText', 'order', 'status',
+          'uploadedBy', 'uploadedAt', 'createdAt', 'updatedAt', 'updatedBy', 'schemaVersion'
+        ])
+        && data.assetId == assetId
+        && data.businessId == businessId
+        && isValidNullableString(data, 'studioId', 100)
+        && data.publicId is string && data.publicId.size() >= 1 && data.publicId.size() <= 240
+        && data.secureUrl is string
+        && data.secureUrl.size() > 27 && data.secureUrl.size() <= 500
+        && data.secureUrl.matches('^https://res\\.cloudinary\\.com/.+')
+        && data.format in ['jpg', 'jpeg', 'png', 'webp']
+        && data.width is int && data.width >= 1 && data.width <= 20000
+        && data.height is int && data.height >= 1 && data.height <= 20000
+        && data.bytes is int && data.bytes >= 1 && data.bytes <= 52428800
+        && isValidNullableString(data, 'caption', 200)
+        && isValidNullableString(data, 'altText', 200)
+        && data.order is int && data.order >= 0 && data.order <= 10000
+        && data.status in ['active', 'archived']
+        && data.uploadedBy is string && data.uploadedBy.size() >= 1
+        && isValidNullableString(data, 'updatedBy', 128)
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
     // -------------------------------------------------------------------------
     // Global user profile (must NEVER contain role/permission/business access)
     // -------------------------------------------------------------------------
@@ -1082,9 +1114,55 @@ service cloud.firestore {
       }
 
       // -----------------------------------------------------------------------
-      // Phase 06+ Subcollections remain explicitly denied by default
+      // Phase 06: Gallery Assets (Cloudinary Metadata & Soft-Archive)
       // -----------------------------------------------------------------------
-      match /galleryAssets/{assetId} { allow read, write: if false; }
+      match /galleryAssets/{assetId} {
+        allow read: if hasActiveMembership(businessId);
+
+        allow create: if canManageGallery(businessId)
+          && isValidGalleryAssetData(request.resource.data, businessId, assetId)
+          && request.resource.data.status == 'active'
+          && request.resource.data.uploadedBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.uploadedAt == request.time
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if (
+            (
+              canManageGallery(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['studioId', 'caption', 'altText', 'order', 'updatedBy', 'updatedAt'])
+            )
+            || (
+              isOwner(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['studioId', 'caption', 'altText', 'order', 'status', 'updatedBy', 'updatedAt'])
+              && request.resource.data.status in ['active', 'archived']
+            )
+          )
+          && isValidNullableString(request.resource.data, 'studioId', 100)
+          && isValidNullableString(request.resource.data, 'caption', 200)
+          && isValidNullableString(request.resource.data, 'altText', 200)
+          && request.resource.data.order is int
+          && request.resource.data.order >= 0
+          && request.resource.data.order <= 10000
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.publicId == resource.data.publicId
+          && request.resource.data.secureUrl == resource.data.secureUrl
+          && request.resource.data.format == resource.data.format
+          && request.resource.data.width == resource.data.width
+          && request.resource.data.height == resource.data.height
+          && request.resource.data.bytes == resource.data.bytes
+          && request.resource.data.uploadedBy == resource.data.uploadedBy
+          && request.resource.data.uploadedAt == resource.data.uploadedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.assetId == resource.data.assetId;
+
+        allow delete: if false;
+      }
     }
 
     // Default deny fallback for every other path

@@ -507,7 +507,7 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
     await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm'), { summary: 'Tampered' }));
     await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm')));
     await assertFails(getDoc(doc(opADb, 'businesses', BIZ_ID, 'ledgerEntries', 'led-1')));
-    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'galleryAssets', 'gal-1')));
+    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'unreleasedPhaseModule', 'doc-1')));
   });
 
   it('prevents concurrent race double-booking across two simultaneous clients and executes partial-overlap atomic reschedule', async () => {

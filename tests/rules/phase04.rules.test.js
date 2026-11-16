@@ -491,7 +491,7 @@ describe('Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Comm
     );
     expect(opAScopedSnap.docs).toHaveLength(1);
 
-    // 4. Phase 06+ collections remain strictly locked `if false` even for active Owner
-    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'galleryAssets', 'gal-1')));
+    // 4. Catch-all unreleased collections remain strictly locked `if false` even for active Owner
+    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'unreleasedPhaseModule', 'doc-1')));
   });
 });

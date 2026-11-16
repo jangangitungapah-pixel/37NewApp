@@ -175,6 +175,18 @@ export const NOTIFICATION_CHANNEL = Object.freeze({
   IN_APP: 'in_app',
 });
 
+export const GALLERY_ASSET_STATUS = Object.freeze({
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+});
+
+export const GALLERY_IMAGE_FORMATS = Object.freeze({
+  JPG: 'jpg',
+  JPEG: 'jpeg',
+  PNG: 'png',
+  WEBP: 'webp',
+});
+
 export const SCHEMA_VERSIONS = Object.freeze({
   USER_PROFILE: 1,
   BUSINESS: 1,
@@ -190,6 +202,7 @@ export const SCHEMA_VERSIONS = Object.freeze({
   LEDGER_ENTRY: 1,
   COMMISSION_ENTRY: 1,
   NOTIFICATION: 1,
+  GALLERY_ASSET: 1,
 });
 
 export const OPERATOR_DEFAULT_PERMISSIONS = Object.freeze({

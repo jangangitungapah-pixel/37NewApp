@@ -10,8 +10,17 @@ import { LoginPage } from '../../features/auth/LoginPage.jsx';
 import { OnboardingBusinessPage } from '../../features/auth/OnboardingBusinessPage.jsx';
 import { AccessDeniedPage } from '../../features/auth/AccessDeniedPage.jsx';
 import { ConfigErrorScreen } from '../../features/auth/ConfigErrorScreen.jsx';
-import { OwnerRoutes } from '../../portals/owner/routes/OwnerRoutes.jsx';
-import { OperatorRoutes } from '../../portals/operator/routes/OperatorRoutes.jsx';
+import { lazyNamed } from './lazyNamed.js';
+import { RouteSuspense } from './RouteSuspense.jsx';
+
+const OwnerRoutes = lazyNamed(
+  () => import('../../portals/owner/routes/OwnerRoutes.jsx'),
+  'OwnerRoutes',
+);
+const OperatorRoutes = lazyNamed(
+  () => import('../../portals/operator/routes/OperatorRoutes.jsx'),
+  'OperatorRoutes',
+);
 
 export function AppRouter() {
   return (
@@ -44,11 +53,25 @@ export function AppRouter() {
       />
 
       <Route element={<RequireActiveRole requiredRole={ROLES.OWNER} />}>
-        <Route path="/owner/*" element={<OwnerRoutes />} />
+        <Route
+          path="/owner/*"
+          element={
+            <RouteSuspense label="Memuat Owner Portal...">
+              <OwnerRoutes />
+            </RouteSuspense>
+          }
+        />
       </Route>
 
       <Route element={<RequireActiveRole requiredRole={ROLES.OPERATOR} />}>
-        <Route path="/operator/*" element={<OperatorRoutes />} />
+        <Route
+          path="/operator/*"
+          element={
+            <RouteSuspense label="Memuat Operator Portal...">
+              <OperatorRoutes />
+            </RouteSuspense>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

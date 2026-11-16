@@ -1,27 +1,64 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ROLES } from '../../../domain/enums/roles.js';
-import { BookingCalendarPage } from '../../../features/bookings/BookingCalendarPage.jsx';
-import { CustomersPage } from '../../../features/customers/CustomersPage.jsx';
+import { lazyNamed } from '../../../app/router/lazyNamed.js';
+import { RouteSuspense } from '../../../app/router/RouteSuspense.jsx';
 import { PhaseFoundationDashboard } from '../../../features/dashboard/PhaseFoundationDashboard.jsx';
-import { SessionSecurityProfilePage } from '../../../features/dashboard/SessionSecurityProfilePage.jsx';
-import { OperatorCommissionsPage } from '../../../features/finance/OperatorCommissionsPage.jsx';
-import { ActivityTimelinePage } from '../../../features/notifications/ActivityTimelinePage.jsx';
-import { ServicesPricingPage } from '../../../features/services/ServicesPricingPage.jsx';
-import { StudiosPage } from '../../../features/studios/StudiosPage.jsx';
 import { OperatorLayout } from '../layout/OperatorLayout.jsx';
+
+const BookingCalendarPage = lazyNamed(
+  () => import('../../../features/bookings/BookingCalendarPage.jsx'),
+  'BookingCalendarPage',
+);
+const OperatorCommissionsPage = lazyNamed(
+  () => import('../../../features/finance/OperatorCommissionsPage.jsx'),
+  'OperatorCommissionsPage',
+);
+const ActivityTimelinePage = lazyNamed(
+  () => import('../../../features/notifications/ActivityTimelinePage.jsx'),
+  'ActivityTimelinePage',
+);
+const GalleryPage = lazyNamed(
+  () => import('../../../features/gallery/GalleryPage.jsx'),
+  'GalleryPage',
+);
+const StudiosPage = lazyNamed(
+  () => import('../../../features/studios/StudiosPage.jsx'),
+  'StudiosPage',
+);
+const ServicesPricingPage = lazyNamed(
+  () => import('../../../features/services/ServicesPricingPage.jsx'),
+  'ServicesPricingPage',
+);
+const CustomersPage = lazyNamed(
+  () => import('../../../features/customers/CustomersPage.jsx'),
+  'CustomersPage',
+);
+const SessionSecurityProfilePage = lazyNamed(
+  () => import('../../../features/dashboard/SessionSecurityProfilePage.jsx'),
+  'SessionSecurityProfilePage',
+);
+
+function lazyElement(Component, label) {
+  return (
+    <RouteSuspense label={label}>
+      <Component />
+    </RouteSuspense>
+  );
+}
 
 export function OperatorRoutes() {
   return (
     <Routes>
       <Route element={<OperatorLayout />}>
         <Route index element={<PhaseFoundationDashboard portalRole={ROLES.OPERATOR} />} />
-        <Route path="bookings" element={<BookingCalendarPage />} />
-        <Route path="commissions" element={<OperatorCommissionsPage />} />
-        <Route path="activity" element={<ActivityTimelinePage />} />
-        <Route path="studios" element={<StudiosPage />} />
-        <Route path="services" element={<ServicesPricingPage />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="profile" element={<SessionSecurityProfilePage />} />
+        <Route path="bookings" element={lazyElement(BookingCalendarPage, 'Memuat kalender booking...')} />
+        <Route path="commissions" element={lazyElement(OperatorCommissionsPage, 'Memuat komisi operator...')} />
+        <Route path="activity" element={lazyElement(ActivityTimelinePage, 'Memuat aktivitas studio...')} />
+        <Route path="gallery" element={lazyElement(GalleryPage, 'Memuat galeri studio...')} />
+        <Route path="studios" element={lazyElement(StudiosPage, 'Memuat studio ditugaskan...')} />
+        <Route path="services" element={lazyElement(ServicesPricingPage, 'Memuat layanan & tarif...')} />
+        <Route path="customers" element={lazyElement(CustomersPage, 'Memuat customer...')} />
+        <Route path="profile" element={lazyElement(SessionSecurityProfilePage, 'Memuat profil & akses...')} />
         <Route path="*" element={<Navigate to="/operator" replace />} />
       </Route>
     </Routes>
