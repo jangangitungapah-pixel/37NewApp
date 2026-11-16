@@ -154,7 +154,12 @@ export function subscribeBookingsInRange({
       (snap) => {
         try {
           const items = snap.docs.map(mapBookingSnapshot).filter(Boolean);
-          onData(items, { fromCache: snap.metadata.fromCache });
+          onData(items, {
+            fromCache: snap.metadata.fromCache,
+            possiblyTruncated: snap.size >= 150,
+            limit: 150,
+            returned: snap.size,
+          });
         } catch (err) {
           onError(mapFirebaseError(err));
         }
@@ -177,7 +182,12 @@ export function subscribeBookingsInRange({
       (snap) => {
         try {
           const items = snap.docs.map(mapBookingSnapshot).filter(Boolean);
-          onData(items, { fromCache: snap.metadata.fromCache });
+          onData(items, {
+            fromCache: snap.metadata.fromCache,
+            possiblyTruncated: snap.size >= 150,
+            limit: 150,
+            returned: snap.size,
+          });
         } catch (err) {
           onError(mapFirebaseError(err));
         }
@@ -188,7 +198,8 @@ export function subscribeBookingsInRange({
 
   const chunks = chunkArray(assignedIds, 10);
   const chunkMap = new Map();
-  let anyFromCache = false;
+  const chunkCacheMap = new Map();
+  const chunkTruncationMap = new Map();
 
   const emitMerged = () => {
     const deduped = new Map();
@@ -203,7 +214,14 @@ export function subscribeBookingsInRange({
       }
       return (a.startAt?.getTime?.() || 0) - (b.startAt?.getTime?.() || 0);
     });
-    onData(sorted, { fromCache: anyFromCache });
+    const truncatedChunks = Array.from(chunkTruncationMap.values()).filter(Boolean).length;
+    onData(sorted, {
+      fromCache: Array.from(chunkCacheMap.values()).some(Boolean),
+      possiblyTruncated: truncatedChunks > 0,
+      truncatedChunks,
+      chunkCount: chunks.length,
+      limitPerChunk: 100,
+    });
   };
 
   const unsubs = chunks.map((chunkIds, idx) => {
@@ -220,7 +238,8 @@ export function subscribeBookingsInRange({
       q,
       (snap) => {
         try {
-          anyFromCache = snap.metadata.fromCache;
+          chunkCacheMap.set(idx, snap.metadata.fromCache);
+          chunkTruncationMap.set(idx, snap.size >= 100);
           chunkMap.set(idx, snap.docs.map(mapBookingSnapshot).filter(Boolean));
           emitMerged();
         } catch (err) {
