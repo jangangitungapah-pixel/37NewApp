@@ -188,7 +188,7 @@ export async function transitionBookingStatusUseCase({
   // Confirmation is the only transition handled by this decision use case.
   if (targetStatus !== BOOKING_STATUS.CONFIRMED) {
     throw new AppError({
-      category: ERROR_CATEGORY.FAILED_PRECONDITION,
+      category: ERROR_CATEGORY.CONFLICT,
       code: 'booking/session-action-required',
       message: 'Perubahan status operasional harus menggunakan booking session use case agar timestamp, actor, event, dan slot changes tercatat secara atomik.',
     });
