@@ -25,6 +25,10 @@ export const BOOKING_STATUS_META = Object.freeze({
     label: 'Settled / Lunas',
     badgeClass: 'badge-success',
   },
+  [BOOKING_STATUS.REJECTED]: {
+    label: 'Ditolak',
+    badgeClass: 'badge-danger',
+  },
   [BOOKING_STATUS.CANCELLED]: {
     label: 'Dibatalkan',
     badgeClass: 'badge-danger',
