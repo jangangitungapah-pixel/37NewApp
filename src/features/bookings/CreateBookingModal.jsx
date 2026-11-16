@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { CalendarPlus, Lock, UserPlus, WifiOff } from 'lucide-react';
 import {
   listCustomersPageUseCase,
@@ -23,10 +25,25 @@ import {
   computeBookingSlotPlan,
   getTodayDateKey,
 } from '../../domain/calculations/slotGenerator.js';
-import { ModalDialog } from '../../shared/components/ModalDialog.jsx';
+import { DialogModal } from '../../components/ui/DialogModal.jsx';
+import { Button } from '../../components/ui/Button.jsx';
+import { Input } from '../../components/ui/Input.jsx';
+import { SelectField } from '../../components/ui/SelectField.jsx';
+import { Textarea } from '../../components/ui/Textarea.jsx';
+import { FormField } from '../../components/forms/FormField.jsx';
+import { createZodFormConfig, extractFieldErrorMessage } from '../../lib/validation/formHelpers.js';
 import { StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscription.js';
 import { formatIdr, formatOperatingHours } from '../../shared/utils/formatters.js';
+
+const bookingCreateSchema = z.object({
+  dateKey: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/, 'Tanggal booking wajib valid.'),
+  startTime: z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/, 'Jam mulai wajib valid.'),
+  durationMinutes: z.coerce.number().int().min(15, 'Durasi minimal 15 menit.').max(720, 'Durasi maksimal 12 jam.'),
+  customerId: z.string().min(1, 'Customer wajib dipilih.'),
+  discountMinor: z.coerce.number().int().min(0, 'Diskon tidak boleh negatif.'),
+  notes: z.string().max(500, 'Catatan maksimal 500 karakter.'),
+});
 
 export function CreateBookingModal({
   onClose,
@@ -66,8 +83,6 @@ export function CreateBookingModal({
   );
 
   const tz = selectedStudio?.timezone || business?.timezone || 'Asia/Jakarta';
-  const [dateKey, setDateKey] = useState(() => prefillDateKey || getTodayDateKey(tz));
-
   const eligibleServices = useMemo(
     () =>
       activeServices.filter(
@@ -90,13 +105,6 @@ export function CreateBookingModal({
     () => selectedService?.durationOptions || [60],
     [selectedService],
   );
-  const [durationMinutes, setDurationMinutes] = useState(
-    () => durationOptions[0] || 60,
-  );
-  const effectiveDuration = durationOptions.includes(Number(durationMinutes))
-    ? Number(durationMinutes)
-    : durationOptions[0] || 60;
-
   const startOptions = useMemo(() => {
     if (!selectedStudio) return [];
     return buildStartTimeOptions({
@@ -106,23 +114,43 @@ export function CreateBookingModal({
     });
   }, [scheduleSetting, selectedStudio]);
 
-  const [startTime, setStartTime] = useState(
-    () => prefillStartTime || startOptions[0]?.timeHHmm || '10:00',
-  );
-  const effectiveStartTime = startOptions.some((o) => o.timeHHmm === startTime)
+  const {
+    register,
+    handleSubmit: handleFormSubmit,
+    setValue,
+    setError,
+    clearErrors,
+    watch,
+    formState: { errors: formErrors },
+  } = useForm(createZodFormConfig(bookingCreateSchema, {
+    dateKey: prefillDateKey || getTodayDateKey(tz),
+    startTime: prefillStartTime || startOptions[0]?.timeHHmm || '10:00',
+    durationMinutes: durationOptions[0] || 60,
+    customerId: '',
+    discountMinor: '0',
+    notes: '',
+  }));
+
+  const dateKey = watch('dateKey');
+  const startTime = watch('startTime');
+  const durationMinutes = watch('durationMinutes');
+  const customerId = watch('customerId');
+  const discountInput = watch('discountMinor');
+  const notes = watch('notes');
+
+  const effectiveDuration = durationOptions.includes(Number(durationMinutes))
+    ? Number(durationMinutes)
+    : durationOptions[0] || 60;
+  const effectiveStartTime = startOptions.some((option) => option.timeHHmm === startTime)
     ? startTime
     : startOptions[0]?.timeHHmm || '10:00';
 
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(true);
-  const [customerId, setCustomerId] = useState('');
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const [quickCustName, setQuickCustName] = useState('');
   const [quickCustPhone, setQuickCustPhone] = useState('');
   const [quickCustAct, setQuickCustAct] = useState('');
-
-  const [discountInput, setDiscountInput] = useState('0');
-  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -146,7 +174,7 @@ export function CreateBookingModal({
         if (!active) return;
         setCustomers(res.items);
         if (res.items.length > 0) {
-          setCustomerId((prev) => prev || res.items[0].customerId);
+          setValue('customerId', res.items[0].customerId, { shouldValidate: true });
         }
       } catch (err) {
         if (active) setErrorMessage(err.message || 'Gagal memuat daftar customer.');
@@ -209,7 +237,7 @@ export function CreateBookingModal({
           selectedStudio.slotGranularityMinutes || scheduleSetting?.slotGranularityMinutes || 15,
       });
 
-      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(discountInput || 0))) : 0;
+      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(values.discountMinor || 0))) : 0;
       const priceSnapshot = calculateServicePrice({
         service: selectedService,
         durationMinutes: effectiveDuration,
@@ -268,7 +296,7 @@ export function CreateBookingModal({
         },
       });
       setCustomers((prev) => [created, ...prev]);
-      setCustomerId(created.customerId);
+      setValue('customerId', created.customerId, { shouldValidate: true, shouldDirty: true });
       setShowQuickCustomer(false);
       setQuickCustName('');
       setQuickCustPhone('');
@@ -280,13 +308,14 @@ export function CreateBookingModal({
     }
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  async function handleSubmit(values) {
     setErrorMessage('');
+    clearErrors();
 
-    const selectedCustomer = customers.find((c) => c.customerId === customerId);
+    const selectedCustomer = customers.find((c) => c.customerId === values.customerId);
     if (!selectedCustomer) {
-      setErrorMessage('Pilih customer terlebih dahulu.');
+      setError('customerId', { type: 'validate', message: 'Customer yang dipilih tidak tersedia atau sudah tidak aktif.' });
+      setErrorMessage('Customer yang dipilih tidak tersedia. Pilih ulang customer aktif.');
       return;
     }
     if (!selectedStudio || !selectedService) {
@@ -296,7 +325,7 @@ export function CreateBookingModal({
 
     setSubmitting(true);
     try {
-      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(discountInput || 0))) : 0;
+      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(values.discountMinor || 0))) : 0;
       const created = await createBookingUseCase({
         member,
         studio: selectedStudio,
@@ -307,7 +336,7 @@ export function CreateBookingModal({
         startTime: effectiveStartTime,
         durationMinutes: effectiveDuration,
         discountMinor,
-        notes: notes.trim() || null,
+        notes: values.notes.trim() || null,
         scheduleSetting,
         pricingSetting,
         commissionSetting,
@@ -324,14 +353,20 @@ export function CreateBookingModal({
     }
   }
 
+  const submitBooking = handleFormSubmit(handleSubmit);
+
   return (
-    <ModalDialog
+    <DialogModal
       open
-      onClose={onClose}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !submitting) onClose();
+      }}
+      size="xl"
       title="Buat Booking Studio Baru"
-      subtitle={`Reservasi atomik per bucket 15 menit (${tz}) dengan price & commission snapshot.`}
+      description={`Reservasi slot 15 menit (${tz}) dengan price dan commission snapshot.`}
+      className="max-h-[min(92vh,900px)] overflow-y-auto"
     >
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
+      <form onSubmit={submitBooking} className="grid gap-4">
         {!isOnline && (
           <StatusAlert
             variant="danger"
@@ -384,7 +419,7 @@ export function CreateBookingModal({
                   type="date"
                   className="field-input"
                   value={dateKey}
-                  onChange={(e) => setDateKey(e.target.value)}
+                  onChange={(e) => setValue('dateKey', e.target.value, { shouldValidate: true, shouldDirty: true })}
                   required
                 />
               </div>
@@ -417,7 +452,7 @@ export function CreateBookingModal({
                   id="bk-duration"
                   className="field-input"
                   value={effectiveDuration}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  onChange={(e) => setValue('durationMinutes', Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                 >
                   {durationOptions.map((dur) => (
                     <option key={dur} value={dur}>
@@ -436,7 +471,7 @@ export function CreateBookingModal({
                 id="bk-start-time"
                 className="field-input"
                 value={effectiveStartTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => setValue('startTime', e.target.value, { shouldValidate: true, shouldDirty: true })}
               >
                 {startOptions.map((opt) => {
                   const startLocked = occupiedBucketSet.has(opt.bucketIndex);
@@ -507,7 +542,7 @@ export function CreateBookingModal({
                   id="bk-customer"
                   className="field-input"
                   value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
+                  onChange={(e) => setValue('customerId', e.target.value, { shouldValidate: true, shouldDirty: true })}
                   disabled={customersLoading}
                 >
                   {customersLoading ? (
@@ -538,7 +573,7 @@ export function CreateBookingModal({
                   step={1000}
                   className="field-input"
                   value={discountAllowed ? discountInput : '0'}
-                  onChange={(e) => setDiscountInput(e.target.value)}
+                  onChange={(e) => setValue('discountMinor', e.target.value, { shouldValidate: true, shouldDirty: true })}
                   disabled={!discountAllowed}
                 />
               </div>
@@ -553,7 +588,7 @@ export function CreateBookingModal({
                   placeholder="Kebutuhan mic, ampli, shift, dll."
                   maxLength={500}
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={(e) => setValue('notes', e.target.value, { shouldValidate: true, shouldDirty: true })}
                 />
               </div>
             </div>
@@ -640,6 +675,6 @@ export function CreateBookingModal({
           </>
         )}
       </form>
-    </ModalDialog>
+    </DialogModal>
   );
 }
