@@ -34,12 +34,13 @@ const VALID_INITIAL_STATUSES = new Set(Object.values(BOOKING_INITIAL_STATUS_POLI
 export const BOOKING_TRANSITIONS = Object.freeze({
   [BOOKING_STATUS.PENDING_CONFIRMATION]: Object.freeze([
     BOOKING_STATUS.CONFIRMED,
+    BOOKING_STATUS.REJECTED,
     BOOKING_STATUS.CANCELLED,
   ]),
   [BOOKING_STATUS.CONFIRMED]: Object.freeze([
-    BOOKING_STATUS.IN_PROGRESS,
     BOOKING_STATUS.CANCELLED,
     BOOKING_STATUS.NO_SHOW,
+    BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT,
   ]),
   [BOOKING_STATUS.IN_PROGRESS]: Object.freeze([
     BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT,
@@ -55,6 +56,7 @@ export const BOOKING_TRANSITIONS = Object.freeze({
   [BOOKING_STATUS.SETTLED]: Object.freeze([]),
   [BOOKING_STATUS.CANCELLED]: Object.freeze([]),
   [BOOKING_STATUS.NO_SHOW]: Object.freeze([]),
+  [BOOKING_STATUS.REJECTED]: Object.freeze([]),
 });
 
 // Keep exported symbol name for Phase 03 compatibility
@@ -63,6 +65,7 @@ export const PHASE03_BOOKING_TRANSITIONS = BOOKING_TRANSITIONS;
 export const RELEASING_BOOKING_STATUSES = new Set([
   BOOKING_STATUS.CANCELLED,
   BOOKING_STATUS.NO_SHOW,
+  BOOKING_STATUS.REJECTED,
 ]);
 
 export const RESCHEDULABLE_BOOKING_STATUSES = new Set([
@@ -71,7 +74,36 @@ export const RESCHEDULABLE_BOOKING_STATUSES = new Set([
 ]);
 
 export function isBookingBlockingStatus(status) {
-  return BLOCKING_STATUS_SET.has(status);
+  return BLOCKING_STATUS_SET.has(status)
+    && status !== BOOKING_STATUS.CANCELLED
+    && status !== BOOKING_STATUS.NO_SHOW
+    && status !== BOOKING_STATUS.REJECTED;
+}
+
+export function isBookingBlockingAvailability(booking) {
+  return Boolean(booking && isBookingBlockingStatus(booking.status));
+}
+
+export function deriveSessionStatusFromBookingStatus(status) {
+  switch (status) {
+    case BOOKING_STATUS.PENDING_CONFIRMATION:
+      return 'PENDING';
+    case BOOKING_STATUS.CONFIRMED:
+      return 'UPCOMING';
+    case BOOKING_STATUS.IN_PROGRESS:
+      return 'IN_PROGRESS';
+    case BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT:
+    case BOOKING_STATUS.SETTLEMENT_REVIEW:
+    case BOOKING_STATUS.SETTLED:
+      return 'COMPLETED';
+    case BOOKING_STATUS.NO_SHOW:
+      return 'NO_SHOW';
+    case BOOKING_STATUS.CANCELLED:
+    case BOOKING_STATUS.REJECTED:
+      return 'CANCELLED';
+    default:
+      return 'PENDING';
+  }
 }
 
 export function canTransitionBookingStatus(fromStatus, toStatus) {
@@ -204,6 +236,7 @@ export function buildValidatedNewBookingPayload({
     endAt: slotPlan.endAt,
     slotIds: slotPlan.slotIds,
     status: initialStatus,
+    sessionStatus: deriveSessionStatusFromBookingStatus(initialStatus),
     studioSnapshot: {
       studioId: studio.studioId,
       name: studio.name,
@@ -232,8 +265,25 @@ export function buildValidatedNewBookingPayload({
     cancelReason: null,
     cancelledBy: null,
     cancelledAt: null,
-    checkedInAt: null,
-    completedAt: null,
+    sessionStatus: deriveSessionStatusFromBookingStatus(status),
+    checkedInAt: raw.checkedInAt ?? null,
+    checkedInByUid: optionalStringOrNull(raw.checkedInByUid, 'checkedInByUid'),
+    checkedInByName: optionalStringOrNull(raw.checkedInByName, 'checkedInByName'),
+    actualStartAt: raw.actualStartAt ?? null,
+    actualStartByUid: optionalStringOrNull(raw.actualStartByUid, 'actualStartByUid'),
+    actualStartByName: optionalStringOrNull(raw.actualStartByName, 'actualStartByName'),
+    actualEndAt: raw.actualEndAt ?? null,
+    actualEndByUid: optionalStringOrNull(raw.actualEndByUid, 'actualEndByUid'),
+    actualEndByName: optionalStringOrNull(raw.actualEndByName, 'actualEndByName'),
+    actualDurationMinutes: raw.actualDurationMinutes == null ? null : requireSafeInt(raw.actualDurationMinutes, 'actualDurationMinutes', { min: 0, max: 10080 }),
+    noShowAt: raw.noShowAt ?? null,
+    noShowByUid: optionalStringOrNull(raw.noShowByUid, 'noShowByUid'),
+    noShowByName: optionalStringOrNull(raw.noShowByName, 'noShowByName'),
+    noShowReason: optionalStringOrNull(raw.noShowReason, 'noShowReason'),
+    lastSessionEventId: optionalStringOrNull(raw.lastSessionEventId, 'lastSessionEventId'),
+    lastSessionEventAt: raw.lastSessionEventAt ?? null,
+    lastSessionEventType: optionalStringOrNull(raw.lastSessionEventType, 'lastSessionEventType'),
+    completedAt: raw.completedAt ?? null,
     rescheduleCount: 0,
     schemaVersion: SCHEMA_VERSIONS.BOOKING,
     createdBy: actorUid,
