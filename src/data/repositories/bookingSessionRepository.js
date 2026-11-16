@@ -159,6 +159,9 @@ export async function performBookingSessionActionTransaction({
       const eventId = operationContext.operationId;
       const bookingUpdate = {
         sessionStatus: actionResult.nextSessionStatus,
+        lastOperationId: operationContext.operationId,
+        lastOperationType: BOOKING_OPERATION_TYPE.SESSION,
+        lastOperationPayloadHash: operationContext.payloadHash,
         lastSessionEventId: eventId,
         lastSessionEventAt: serverTimestamp(),
         lastSessionEventType: action,
