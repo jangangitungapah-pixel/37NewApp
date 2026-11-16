@@ -183,6 +183,16 @@ export async function transitionBookingStatusUseCase({
 }) {
   assertOnline(isOnline);
   assertBookingStudioAccess(member, booking?.studioId);
+
+  // Booking decisions must not bypass the dedicated session state machine.
+  // Confirmation is the only transition handled by this decision use case.
+  if (targetStatus !== BOOKING_STATUS.CONFIRMED) {
+    throw new AppError({
+      category: ERROR_CATEGORY.FAILED_PRECONDITION,
+      code: 'booking/session-action-required',
+      message: 'Perubahan status operasional harus menggunakan booking session use case agar timestamp, actor, event, dan slot changes tercatat secara atomik.',
+    });
+  }
   assertValidBookingTransition(booking.status, targetStatus);
 
   if (RELEASING_BOOKING_STATUSES.has(targetStatus)) {
