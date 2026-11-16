@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ROLES } from '../../../domain/enums/roles.js';
 import { lazyNamed } from '../../../app/router/lazyNamed.js';
 import { RouteSuspense } from '../../../app/router/RouteSuspense.jsx';
-import { PhaseFoundationDashboard } from '../../../features/dashboard/PhaseFoundationDashboard.jsx';
+import { DashboardOverviewPage } from '../../../features/dashboard/DashboardOverviewPage.jsx';
 import { OwnerLayout } from '../layout/OwnerLayout.jsx';
 
 const BookingCalendarPage = lazyNamed(
@@ -58,7 +58,7 @@ export function OwnerRoutes() {
   return (
     <Routes>
       <Route element={<OwnerLayout />}>
-        <Route index element={<PhaseFoundationDashboard portalRole={ROLES.OWNER} />} />
+        <Route index element={<DashboardOverviewPage portalRole={ROLES.OWNER} />} />
         <Route path="bookings" element={lazyElement(BookingCalendarPage, 'Memuat kalender booking...')} />
         <Route path="finance" element={lazyElement(FinanceSettlementPage, 'Memuat settlement & ledger...')} />
         <Route path="activity" element={lazyElement(ActivityTimelinePage, 'Memuat aktivitas bisnis...')} />

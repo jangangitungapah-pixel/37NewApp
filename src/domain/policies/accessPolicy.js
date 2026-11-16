@@ -225,3 +225,50 @@ export function canManageGallery(member) {
 export function canArchiveGalleryAsset(member) {
   return isOwnerMember(member);
 }
+
+/**
+ * Evaluates whether a member can view business-wide financial & analytics KPIs.
+ * @param {{ role?: string, status?: string } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canViewBusinessAnalytics(member) {
+  return isOwnerMember(member);
+}
+
+/**
+ * Filters booking records strictly to the studios accessible by the member.
+ * Owners receive all bookings; Operators receive only bookings in `assignedStudioIds`.
+ *
+ * @template {{ studioId?: string }} T
+ * @param {{ role?: string, status?: string, assignedStudioIds?: string[] } | null | undefined} member
+ * @param {T[]} bookings
+ * @returns {T[]}
+ */
+export function filterBookingsForAnalytics(member, bookings) {
+  if (!Array.isArray(bookings) || !isActiveMember(member)) {
+    return [];
+  }
+  if (member.role === ROLES.OWNER) {
+    return bookings;
+  }
+  return bookings.filter((booking) => canAccessStudio(member, booking?.studioId || ''));
+}
+
+/**
+ * Filters commission entries strictly for analytics:
+ * Owners see all entries; Operators see only entries where `operatorUid === member.uid`.
+ *
+ * @template {{ operatorUid?: string }} T
+ * @param {{ uid?: string, role?: string, status?: string } | null | undefined} member
+ * @param {T[]} entries
+ * @returns {T[]}
+ */
+export function filterCommissionEntriesForAnalytics(member, entries) {
+  if (!Array.isArray(entries) || !isActiveMember(member)) {
+    return [];
+  }
+  if (member.role === ROLES.OWNER) {
+    return entries;
+  }
+  return entries.filter((entry) => entry?.operatorUid === member.uid);
+}

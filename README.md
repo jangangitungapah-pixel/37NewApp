@@ -3,6 +3,7 @@
 Rebuild modular aplikasi manajemen studio musik **37MusicStudio** dari nol dengan **Owner Portal** dan **Operator Portal** dalam satu aplikasi web yang berbagi domain model, use cases, repository contracts, Firebase client, dan Firestore Security Rules.
 
 ## Hard Constraints
+
 - **Frontend**: React + Vite + JavaScript (JSX), struktur modular berbasis fitur (`src/`).
 - **Identity & Database**: Firebase Authentication + Cloud Firestore (satu-satunya database operasional).
 - **Hosting**: Firebase Hosting (statis, tanpa server-side business logic).
@@ -21,10 +22,11 @@ Rebuild modular aplikasi manajemen studio musik **37MusicStudio** dari nol denga
 | **04** | Session, Settlement, Ledger & Commission | Selesai | [Checkpoint Phase 04](docs/checkpoints/phase-04-checkpoint.md) · [Handoff Phase 05](docs/handoffs/phase-05-handoff-prompt.txt) |
 | **05** | Portal Collaboration & Notifications | Selesai | [Checkpoint Phase 05](docs/checkpoints/phase-05-checkpoint.md) · [Handoff Phase 06](docs/handoffs/phase-06-handoff-prompt.txt) |
 | **06** | Gallery & Cloudinary | Selesai | [Checkpoint Phase 06](docs/checkpoints/phase-06-checkpoint.md) · [Handoff Phase 07](docs/handoffs/phase-07-handoff-prompt.txt) |
-| **07** | Dashboard, Analytics & Reporting | Belum Dimulai | — |
+| **07** | Dashboard, Analytics & Reporting | Selesai | [Checkpoint Phase 07](docs/checkpoints/phase-07-checkpoint.md) · [Handoff Phase 08](docs/handoffs/phase-08-handoff-prompt.txt) |
 | **08** | Hardening, Accessibility & Production Readiness | Belum Dimulai | — |
 
 ## Dokumen Arsitektur Phase 00
+
 - [Audit Discovery Awal (Phase 00)](docs/audit/phase-00-discovery-audit.md)
 - [Architecture Decision Record 0001 — Architecture Lock](docs/adr/0001-architecture-lock.md)
 - [Rebuild Plan, Scope & Risk Register](docs/architecture/rebuild-plan-and-risks.md)

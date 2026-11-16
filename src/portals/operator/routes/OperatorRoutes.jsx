@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ROLES } from '../../../domain/enums/roles.js';
 import { lazyNamed } from '../../../app/router/lazyNamed.js';
 import { RouteSuspense } from '../../../app/router/RouteSuspense.jsx';
-import { PhaseFoundationDashboard } from '../../../features/dashboard/PhaseFoundationDashboard.jsx';
+import { DashboardOverviewPage } from '../../../features/dashboard/DashboardOverviewPage.jsx';
 import { OperatorLayout } from '../layout/OperatorLayout.jsx';
 
 const BookingCalendarPage = lazyNamed(
@@ -50,7 +50,7 @@ export function OperatorRoutes() {
   return (
     <Routes>
       <Route element={<OperatorLayout />}>
-        <Route index element={<PhaseFoundationDashboard portalRole={ROLES.OPERATOR} />} />
+        <Route index element={<DashboardOverviewPage portalRole={ROLES.OPERATOR} />} />
         <Route path="bookings" element={lazyElement(BookingCalendarPage, 'Memuat kalender booking...')} />
         <Route path="commissions" element={lazyElement(OperatorCommissionsPage, 'Memuat komisi operator...')} />
         <Route path="activity" element={lazyElement(ActivityTimelinePage, 'Memuat aktivitas studio...')} />

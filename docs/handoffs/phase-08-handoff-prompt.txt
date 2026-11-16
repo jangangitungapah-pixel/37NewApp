@@ -1,0 +1,45 @@
+PROCEED TO PHASE 08 — HARDENING, ACCESSIBILITY & PRODUCTION READINESS (37MusicStudio)
+
+READ FIRST:
+1. Repository root: c:\Users\hazel\source\repos\37NewApp
+2. Master Prompt: c:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html (Sections 11–16, especially Acceptance Criteria lines 809–877)
+3. All Phase Checkpoints:
+   - docs/checkpoints/phase-01-checkpoint.md
+   - docs/checkpoints/phase-02-checkpoint.md
+   - docs/checkpoints/phase-03-checkpoint.md
+   - docs/checkpoints/phase-04-checkpoint.md
+   - docs/checkpoints/phase-05-checkpoint.md
+   - docs/checkpoints/phase-06-checkpoint.md
+   - docs/checkpoints/phase-07-checkpoint.md
+4. Existing Configuration, Rules & UI Shell:
+   - firebase.json
+   - firestore.rules
+   - firestore.indexes.json
+   - index.html
+   - src/app/layouts/PortalShell.jsx
+   - src/app/providers/AuthSessionProvider.jsx
+   - src/shared/styles/tokens.css & global styles
+   - src/features/*
+
+HARD CONSTRAINTS (MUST REMAIN INTACT):
+- Stack: React + Vite + JavaScript (JSX), Firebase Auth + Cloud Firestore + Cloudinary unsigned upload only.
+- Target Firebase Project: `musicstudio37app` (databaseId `(default)` Standard Edition — NEVER alter or touch existing unrelated projects on the account).
+- Strict Spark Plan Only: NO backend servers, NO Cloud Functions, NO Blaze-only services, NO paid dependencies.
+- Build & Secret Hygiene: ZERO Cloudinary API secrets or private keys in `.env*`, repo files, or `dist/`. Keep every Vite production chunk under 500 kB.
+
+PHASE 08 SCOPE & DELIVERABLES:
+1. Application Resilience & Error Boundaries:
+   - Add a root React `ErrorBoundary` component (`src/shared/components/AppErrorBoundary.jsx`) wrapping the application in `src/app/` so unexpected runtime UI exceptions degrade gracefully with recovery/reload & sign-out options instead of a white screen.
+   - Verify offline/conflict/permission/validation error handling parity across Bookings, Settlement/Adjustments, Notifications, Gallery, Settings, and Dashboard Analytics.
+2. Accessibility (a11y) & Mobile Responsive Hardening:
+   - Skip-to-main-content link (`#main-content`) and semantic landmark roles (`<header>`, `<nav>`, `<main>`, `<aside>`) in `PortalShell.jsx`.
+   - Focus management & keyboard navigation audit: Escape handling, visible `:focus-visible` outlines, table overflow-x responsiveness, zero horizontal page overflow at `375px` mobile viewport across portals.
+   - Audit ARIA labels, progressbars, SVG chart/title descriptions, image alt attributes, and color contrast in `tokens.css` / CSS.
+3. Quota, Subscriptions & Security Rules Review:
+   - Audit `SubscriptionRegistry` & every `onSnapshot` call site to verify bounded limits and deterministic cleanup on route change & sign-out (`tests/unit/sessionTeardown.test.js` + navigation tests).
+   - Review `firestore.rules` (verify default deny fallback, anti-escalation, immutability, no dead rules, expression count margin) and run full Rules & Index parity verification across all 7 rule suites (`phase01..07.rules.test.js`).
+4. Production Readiness & Deployment Verification Checklist:
+   - Verify `firebase.json` security/caching headers (immutable cache for `/assets/**`, `no-cache` for `/index.html`), clean SPA rewrites, and `.gitignore` coverage.
+   - Create `docs/checkpoints/phase-08-checkpoint.md` (final Acceptance Criteria checklist covering Sections 15 & Production Readiness + manual smoke-test & rollback runbook) and `docs/runbooks/production-deployment-checklist.md`.
+   - Run full post-commit verification: `npm run lint`, `npm run test:unit`, `npm run test:rules`, `npm run build` (no chunk > 500 kB), secret hygiene scan, update `README.md` (all 9 phases 00–08 marked `Selesai`), commit cleanly on `main`, and save verification log to `logs/`.
+   - STOP before running `firebase deploy` unless explicitly instructed to deploy.

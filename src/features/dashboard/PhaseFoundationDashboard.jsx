@@ -16,8 +16,8 @@ const ROADMAP_PHASES = [
   { phase: '04', name: 'Session, Settlement, Immutable Ledger & Commission', state: 'active' },
   { phase: '05', name: 'Portal Collaboration, Activity Log & Notifications', state: 'active' },
   { phase: '06', name: 'Gallery & Cloudinary Restricted Unsigned Upload', state: 'active' },
-  { phase: '07', name: 'Dashboard Analytics & Spark-Safe Reports', state: 'next' },
-  { phase: '08', name: 'Hardening, Accessibility & Production Readiness', state: 'planned' },
+  { phase: '07', name: 'Dashboard Analytics & Spark-Safe Reports', state: 'active' },
+  { phase: '08', name: 'Hardening, Accessibility & Production Readiness', state: 'next' },
 ];
 
 export function PhaseFoundationDashboard({ portalRole }) {
@@ -52,7 +52,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <span className="badge badge-success">
             <ShieldCheck size={14} aria-hidden="true" />
-            <span>Phase 06 Gallery &amp; Cloudinary Active</span>
+            <span>Phase 07 Analytics &amp; Reporting Active</span>
           </span>
           <span className="badge badge-info">
             <Database size={14} aria-hidden="true" />
