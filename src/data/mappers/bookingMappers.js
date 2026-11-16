@@ -3,6 +3,7 @@ import {
   validateBookingDoc,
   validateBookingSlotDoc,
 } from '../../domain/validators/bookingValidator.js';
+import { validateBookingSessionEventDoc } from '../../domain/validators/bookingSessionValidator.js';
 
 function normalizeTimestampValue(value) {
   if (!value) {
@@ -86,9 +87,9 @@ export function mapActivityLogSnapshot(snapshot) {
 export function mapBookingSessionEventSnapshot(snapshot) {
   if (!snapshot || !snapshot.exists()) return null;
   const raw = snapshot.data();
-  return {
+  return validateBookingSessionEventDoc({
     ...raw,
     eventId: snapshot.id,
     createdAt: normalizeTimestampValue(raw?.createdAt),
-  };
+  });
 }
