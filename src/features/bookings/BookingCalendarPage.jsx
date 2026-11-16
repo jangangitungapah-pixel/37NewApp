@@ -403,38 +403,40 @@ export function BookingCalendarPage() {
               </button>
             </div>
 
-            <button
+            <Button
               type="button"
-              className="btn btn-sm"
+              variant="outline"
+              size="icon"
               aria-label="Periode sebelumnya"
               onClick={() => handleNavigate(-1)}
             >
               <ChevronLeft size={15} aria-hidden="true" />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-sm"
+              variant="outline"
+              size="sm"
               onClick={() => setAnchorDateKey(todayKey)}
             >
               Hari Ini
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-sm"
+              variant="outline"
+              size="icon"
               aria-label="Periode berikutnya"
               onClick={() => handleNavigate(1)}
             >
               <ChevronRight size={15} aria-hidden="true" />
-            </button>
+            </Button>
 
-            <input
+            <Input
               type="date"
-              className="field-input"
               aria-label="Pilih tanggal acuan"
-              style={{ width: 'auto', minHeight: '34px', padding: '4px 10px' }}
+              className="w-auto min-w-36"
               value={anchorDateKey}
-              onChange={(e) => {
-                if (e.target.value) setAnchorDateKey(e.target.value);
+              onChange={(event) => {
+                if (event.target.value) setAnchorDateKey(event.target.value);
               }}
             />
           </div>
