@@ -178,3 +178,31 @@ export function canApplyBookingDiscount(member, pricingSetting) {
     hasMemberPermission(member, 'canApplyDiscount')
   );
 }
+
+/**
+ * Evaluates whether a member can perform final booking settlement & financial adjustments.
+ * Strictly Owner-only by default Spark policy.
+ */
+export function canSettleBookings(member) {
+  return isOwnerMember(member);
+}
+
+/**
+ * Evaluates whether a member can view full business ledger / cashflow entries.
+ */
+export function canViewBusinessLedger(member) {
+  return isOwnerMember(member);
+}
+
+/**
+ * Evaluates whether a member can view a specific commission entry (Owner all; Operator own only).
+ */
+export function canViewCommissionEntry(member, entry) {
+  if (!isActiveMember(member) || !entry) {
+    return false;
+  }
+  if (member.role === ROLES.OWNER) {
+    return true;
+  }
+  return entry.operatorUid === member.uid;
+}

@@ -30,11 +30,26 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/settings/$(settingId);
     }
 
+    function ledgerEntryPath(businessId, entryId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/ledgerEntries/$(entryId);
+    }
+
+    function commissionEntryPath(businessId, entryId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/commissionEntries/$(entryId);
+    }
+
+    function getMemberDataIfPresent(businessId) {
+      return isSignedIn() && exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+    }
+
+    function isActiveMemberRecord(m) {
+      return m != null && m.status == 'active' && m.uid == request.auth.uid;
+    }
+
     function hasActiveMembership(businessId) {
-      return isSignedIn()
-        && exists(memberPath(businessId, request.auth.uid))
-        && get(memberPath(businessId, request.auth.uid)).data.status == 'active'
-        && get(memberPath(businessId, request.auth.uid)).data.uid == request.auth.uid;
+      return isActiveMemberRecord(getMemberDataIfPresent(businessId));
     }
 
     function currentMember(businessId) {
@@ -42,24 +57,22 @@ service cloud.firestore {
     }
 
     function isOwner(businessId) {
-      return hasActiveMembership(businessId)
-        && currentMember(businessId).role == 'owner';
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m) && m.role == 'owner';
     }
 
     function canAccessCustomers(businessId) {
-      return isOwner(businessId)
-        || (
-          hasActiveMembership(businessId)
-          && currentMember(businessId).get(['permissions', 'canManageCustomers'], false) == true
-        );
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m)
+        && (m.role == 'owner' || m.get(['permissions', 'canManageCustomers'], false) == true);
     }
 
     function canOperateStudioBooking(businessId, studioId) {
-      return isOwner(businessId)
-        || (
-          hasActiveMembership(businessId)
-          && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
-          && studioId in currentMember(businessId).assignedStudioIds
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m)
+        && (
+          m.role == 'owner'
+          || (m.get(['permissions', 'canManageBookings'], false) == true && studioId in m.assignedStudioIds)
         );
     }
 
@@ -415,7 +428,7 @@ service cloud.firestore {
           'studioSnapshot', 'serviceSnapshot', 'customerSnapshot',
           'priceSnapshot', 'commissionSnapshot',
           'notes', 'cancelReason', 'cancelledBy', 'cancelledAt',
-          'checkedInAt', 'completedAt', 'rescheduleCount',
+          'checkedInAt', 'completedAt', 'settlement', 'rescheduleCount',
           'schemaVersion', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
         ])
         && data.bookingId == bookingId
@@ -436,7 +449,8 @@ service cloud.firestore {
         && data.slotIds is list && data.slotIds.size() >= 1 && data.slotIds.size() <= 96
         && data.status in [
           'PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS',
-          'COMPLETED_PENDING_SETTLEMENT', 'CANCELLED', 'NO_SHOW'
+          'COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW', 'SETTLED',
+          'CANCELLED', 'NO_SHOW'
         ]
         && data.studioSnapshot is map
         && data.serviceSnapshot is map
@@ -448,6 +462,7 @@ service cloud.firestore {
         && data.commissionSnapshot is map
         && data.commissionSnapshot.currency == 'IDR'
         && data.commissionSnapshot.amountMinor is int && data.commissionSnapshot.amountMinor >= 0
+        && (!('settlement' in data) || data.settlement == null || data.settlement is map)
         && isValidNullableString(data, 'notes', 500)
         && isValidNullableString(data, 'cancelReason', 300)
         && isValidNullableString(data, 'cancelledBy', 128)
@@ -493,12 +508,13 @@ service cloud.firestore {
         && data.eventId == eventId
         && data.businessId == businessId
         && data.studioId is string && data.studioId.size() >= 1
-        && data.entityType == 'booking'
+        && data.entityType in ['booking', 'ledger_entry', 'commission_entry']
         && data.entityId is string && data.entityId.size() >= 1
         && data.operationId is string && data.operationId.size() >= 1
         && data.eventType in [
           'booking.created', 'booking.confirmed', 'booking.started',
-          'booking.completed', 'booking.cancelled', 'booking.no_show', 'booking.rescheduled'
+          'booking.completed', 'booking.cancelled', 'booking.no_show', 'booking.rescheduled',
+          'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
         ]
         && data.actorUid == request.auth.uid
         && data.actorRole == currentMember(businessId).role
@@ -506,6 +522,58 @@ service cloud.firestore {
         && data.afterStatus is string && data.afterStatus.size() >= 1
         && isValidNullableString(data, 'reason', 300)
         && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidLedgerEntryData(data, businessId, entryId) {
+      return data.keys().hasOnly([
+          'entryId', 'businessId', 'bookingId', 'studioId', 'dateKey',
+          'type', 'direction', 'amountMinor', 'currency', 'paymentMethod',
+          'reference', 'notes', 'relatedEntryId', 'reason', 'schemaVersion',
+          'createdAt', 'createdBy'
+        ])
+        && data.entryId == entryId
+        && data.businessId == businessId
+        && data.bookingId is string && data.bookingId.size() >= 1
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.type in ['PAYMENT_RECEIVED', 'REFUND', 'ADJUSTMENT', 'REVERSAL']
+        && data.direction in ['inflow', 'outflow']
+        && data.amountMinor is int && data.amountMinor >= 0
+        && data.currency == 'IDR'
+        && (!('paymentMethod' in data) || data.paymentMethod == null || data.paymentMethod in ['cash', 'transfer', 'qris', 'card', 'other'])
+        && isValidNullableString(data, 'reference', 120)
+        && isValidNullableString(data, 'notes', 300)
+        && isValidNullableString(data, 'relatedEntryId', 160)
+        && isValidNullableString(data, 'reason', 300)
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidCommissionEntryData(data, businessId, entryId) {
+      return data.keys().hasOnly([
+          'entryId', 'businessId', 'bookingId', 'studioId', 'dateKey', 'operatorUid',
+          'entryType', 'direction', 'amountMinor', 'currency', 'method', 'rateOrValue',
+          'basis', 'basisAmountMinor', 'source', 'relatedEntryId', 'reason', 'status',
+          'schemaVersion', 'createdAt', 'createdBy'
+        ])
+        && data.entryId == entryId
+        && data.businessId == businessId
+        && data.bookingId is string && data.bookingId.size() >= 1
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.operatorUid is string && data.operatorUid.size() >= 1
+        && data.entryType in ['EARNED', 'ADJUSTMENT', 'REVERSAL']
+        && data.direction in ['credit', 'debit']
+        && data.amountMinor is int && data.amountMinor >= 0
+        && data.currency == 'IDR'
+        && data.method in ['inherit', 'none', 'percentage', 'fixed_per_booking']
+        && data.rateOrValue is int && data.rateOrValue >= 0
+        && data.basis in ['subtotal', 'settled_amount']
+        && data.basisAmountMinor is int && data.basisAmountMinor >= 0
+        && data.source is string && data.source.size() >= 1
+        && isValidNullableString(data, 'relatedEntryId', 160)
+        && isValidNullableString(data, 'reason', 300)
+        && data.status in ['RECORDED', 'ADJUSTED', 'REVERSED']
         && data.schemaVersion is int && data.schemaVersion >= 1;
     }
 
@@ -774,23 +842,35 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time;
 
-        allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
-          && isValidBookingData(request.resource.data, businessId, bookingId)
-          && request.resource.data.bookingId == resource.data.bookingId
-          && request.resource.data.businessId == resource.data.businessId
-          && request.resource.data.studioId == resource.data.studioId
-          && request.resource.data.serviceId == resource.data.serviceId
-          && request.resource.data.customerId == resource.data.customerId
-          && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.updatedBy == request.auth.uid
+        allow update: if request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
           && (
-            // Valid atomic reschedule without lifecycle jump
+            // 1. Operational lifecycle transition (keeps pricing/slot snapshots untouched)
             (
-              resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+              canOperateStudioBooking(businessId, resource.data.studioId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'status', 'cancelReason', 'cancelledBy', 'cancelledAt',
+                'checkedInAt', 'completedAt', 'updatedBy', 'updatedAt'
+              ])
+              && (
+                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
+                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
+                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+              )
+            )
+            // 2. Atomic reschedule (preserving lifecycle status & increments rescheduleCount)
+            || (
+              canOperateStudioBooking(businessId, resource.data.studioId)
+              && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
               && request.resource.data.status == resource.data.status
               && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+                'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+                'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt'
+              ])
+              && request.resource.data.endAt > request.resource.data.startAt
+              && request.resource.data.slotIds is list && request.resource.data.slotIds.size() >= 1 && request.resource.data.slotIds.size() <= 96
               && (
                 request.resource.data.durationMinutes != resource.data.durationMinutes
                 || (
@@ -799,18 +879,28 @@ service cloud.firestore {
                 )
               )
             )
-            // Valid lifecycle status transition keeping historical pricing snapshots untouched
+            // 3. Owner-only settlement review & atomic final settlement (ledger + commission required in tx)
             || (
-              request.resource.data.rescheduleCount == resource.data.rescheduleCount
-              && request.resource.data.slotIds == resource.data.slotIds
-              && request.resource.data.startAt == resource.data.startAt
-              && request.resource.data.endAt == resource.data.endAt
-              && request.resource.data.priceSnapshot == resource.data.priceSnapshot
-              && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
+              isOwner(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'status', 'settlement', 'updatedBy', 'updatedAt'
+              ])
               && (
-                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
-                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
-                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+                (
+                  resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
+                  && request.resource.data.status == 'SETTLEMENT_REVIEW'
+                )
+                || (
+                  resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+                  && request.resource.data.status == 'SETTLED'
+                  && request.resource.data.settlement is map
+                  && request.resource.data.settlement.paidAmountMinor is int
+                  && request.resource.data.settlement.paidAmountMinor >= 0
+                  && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
+                  && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
+                  && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
+                  && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
+                )
               )
             )
           );
@@ -880,17 +970,61 @@ service cloud.firestore {
 
         allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
           && isValidActivityLogData(request.resource.data, businessId, eventId)
+          && (
+            isOwner(businessId)
+            || (
+              request.resource.data.entityType == 'booking'
+              && !(request.resource.data.eventType in [
+                'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
+              ])
+            )
+          )
           && request.resource.data.createdAt == request.time;
 
         allow update, delete: if false;
       }
 
       // -----------------------------------------------------------------------
-      // Phase 04+ Subcollections remain explicitly denied by default until
-      // their schema, invariants, and phase tests are implemented.
+      // Phase 04: Immutable Financial Ledger & Operator Commission Entries
       // -----------------------------------------------------------------------
-      match /ledgerEntries/{entryId} { allow read, write: if false; }
-      match /commissionEntries/{entryId} { allow read, write: if false; }
+      match /ledgerEntries/{entryId} {
+        allow get, list: if isOwner(businessId);
+
+        allow create: if isOwner(businessId)
+          && isValidLedgerEntryData(request.resource.data, businessId, entryId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (
+            request.resource.data.relatedEntryId == null
+            || exists(ledgerEntryPath(businessId, request.resource.data.relatedEntryId))
+          );
+
+        allow update, delete: if false;
+      }
+
+      match /commissionEntries/{entryId} {
+        allow get, list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && resource != null
+            && resource.data.operatorUid == request.auth.uid
+          );
+
+        allow create: if isOwner(businessId)
+          && isValidCommissionEntryData(request.resource.data, businessId, entryId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (
+            request.resource.data.relatedEntryId == null
+            || exists(commissionEntryPath(businessId, request.resource.data.relatedEntryId))
+          );
+
+        allow update, delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 05+ Subcollections remain explicitly denied by default
+      // -----------------------------------------------------------------------
       match /galleryAssets/{assetId} { allow read, write: if false; }
       match /notifications/{notificationId} { allow read, write: if false; }
     }

@@ -14,8 +14,8 @@ const ROADMAP_PHASES = [
   { phase: '01', name: 'Foundation, Auth & Firestore Security Rules', state: 'active' },
   { phase: '02', name: 'Business Master Data (Studios, Services, Customers, Team)', state: 'active' },
   { phase: '03', name: 'Booking Engine & Deterministic Slot Calendar', state: 'active' },
-  { phase: '04', name: 'Session, Settlement, Immutable Ledger & Commission', state: 'next' },
-  { phase: '05', name: 'Portal Collaboration, Activity Log & Notifications', state: 'planned' },
+  { phase: '04', name: 'Session, Settlement, Immutable Ledger & Commission', state: 'active' },
+  { phase: '05', name: 'Portal Collaboration, Activity Log & Notifications', state: 'next' },
   { phase: '06', name: 'Gallery & Cloudinary Restricted Unsigned Upload', state: 'planned' },
   { phase: '07', name: 'Dashboard Analytics & Spark-Safe Reports', state: 'planned' },
   { phase: '08', name: 'Hardening, Accessibility & Production Readiness', state: 'planned' },
@@ -28,6 +28,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
   const quickLinks = isOwner
     ? [
         { to: '/owner/bookings', label: 'Bookings & Calendar' },
+        { to: '/owner/finance', label: 'Settlement & Finance' },
         { to: '/owner/studios', label: 'Studios & Rooms' },
         { to: '/owner/services', label: 'Services & Pricing' },
         { to: '/owner/customers', label: 'Customers' },
@@ -36,6 +37,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
       ]
     : [
         { to: '/operator/bookings', label: 'Kalender & Booking' },
+        { to: '/operator/commissions', label: 'Komisi Saya' },
         { to: '/operator/studios', label: 'Studio Ditugaskan' },
         { to: '/operator/services', label: 'Layanan & Tarif' },
         { to: '/operator/customers', label: 'Customers' },
@@ -47,7 +49,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <span className="badge badge-success">
             <ShieldCheck size={14} aria-hidden="true" />
-            <span>Phase 03 Booking Engine Active</span>
+            <span>Phase 04 Finance & Commission Active</span>
           </span>
           <span className="badge badge-info">
             <Database size={14} aria-hidden="true" />
@@ -115,7 +117,7 @@ export function PhaseFoundationDashboard({ portalRole }) {
           <h2 style={{ margin: 0, fontSize: '18px' }}>Status Implementasi Modul (Phase Gate)</h2>
           <span className="badge">
             <Lock size={13} aria-hidden="true" />
-            <span>Koleksi Phase 04+ (Finance & Gallery) terkunci di Rules</span>
+            <span>Koleksi Phase 05+ (Notifications & Gallery) terkunci di Rules</span>
           </span>
         </div>
 

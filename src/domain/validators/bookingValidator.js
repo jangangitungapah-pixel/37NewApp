@@ -25,13 +25,13 @@ const BLOCKING_STATUS_SET = new Set(BLOCKING_BOOKING_STATUSES);
 const VALID_SLOT_STATUSES = new Set(Object.values(BOOKING_SLOT_STATUS));
 const VALID_SLOT_KINDS = new Set(Object.values(BOOKING_SLOT_KIND));
 const VALID_EVENT_TYPES = new Set(Object.values(ACTIVITY_EVENT_TYPE));
+const VALID_ENTITY_TYPES = new Set(Object.values(ACTIVITY_ENTITY_TYPE));
 const VALID_INITIAL_STATUSES = new Set(Object.values(BOOKING_INITIAL_STATUS_POLICY));
 
 /**
- * Allowed operational lifecycle state transitions in Phase 03.
- * Transitions to `SETTLEMENT_REVIEW` and `SETTLED` stay locked until Phase 04.
+ * Complete booking operational + settlement lifecycle state transitions (Phase 03 + Phase 04).
  */
-export const PHASE03_BOOKING_TRANSITIONS = Object.freeze({
+export const BOOKING_TRANSITIONS = Object.freeze({
   [BOOKING_STATUS.PENDING_CONFIRMATION]: Object.freeze([
     BOOKING_STATUS.CONFIRMED,
     BOOKING_STATUS.CANCELLED,
@@ -45,12 +45,20 @@ export const PHASE03_BOOKING_TRANSITIONS = Object.freeze({
     BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT,
     BOOKING_STATUS.CANCELLED,
   ]),
-  [BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT]: Object.freeze([]),
-  [BOOKING_STATUS.SETTLEMENT_REVIEW]: Object.freeze([]),
+  [BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT]: Object.freeze([
+    BOOKING_STATUS.SETTLEMENT_REVIEW,
+    BOOKING_STATUS.SETTLED,
+  ]),
+  [BOOKING_STATUS.SETTLEMENT_REVIEW]: Object.freeze([
+    BOOKING_STATUS.SETTLED,
+  ]),
   [BOOKING_STATUS.SETTLED]: Object.freeze([]),
   [BOOKING_STATUS.CANCELLED]: Object.freeze([]),
   [BOOKING_STATUS.NO_SHOW]: Object.freeze([]),
 });
+
+// Keep exported symbol name for Phase 03 compatibility
+export const PHASE03_BOOKING_TRANSITIONS = BOOKING_TRANSITIONS;
 
 export const RELEASING_BOOKING_STATUSES = new Set([
   BOOKING_STATUS.CANCELLED,
@@ -67,7 +75,7 @@ export function isBookingBlockingStatus(status) {
 }
 
 export function canTransitionBookingStatus(fromStatus, toStatus) {
-  const allowed = PHASE03_BOOKING_TRANSITIONS[fromStatus] || [];
+  const allowed = BOOKING_TRANSITIONS[fromStatus] || [];
   return allowed.includes(toStatus);
 }
 
@@ -334,6 +342,7 @@ export function validateBookingDoc(raw) {
     cancelledAt: raw.cancelledAt ?? null,
     checkedInAt: raw.checkedInAt ?? null,
     completedAt: raw.completedAt ?? null,
+    settlement: raw.settlement ?? null,
     rescheduleCount: requireSafeInt(raw.rescheduleCount ?? 0, 'rescheduleCount', { min: 0 }),
     schemaVersion: requireSafeInt(raw.schemaVersion ?? SCHEMA_VERSIONS.BOOKING, 'schemaVersion', { min: 1 }),
     createdAt: raw.createdAt ?? null,
@@ -416,6 +425,10 @@ export function validateActivityLogDoc(raw) {
   if (![ROLES.OWNER, ROLES.OPERATOR].includes(actorRole)) {
     throw new DomainValidationError(`actorRole tidak valid: ${actorRole}`, 'actorRole');
   }
+  const entityType = raw.entityType || ACTIVITY_ENTITY_TYPE.BOOKING;
+  if (!VALID_ENTITY_TYPES.has(entityType)) {
+    throw new DomainValidationError(`entityType tidak valid: ${entityType}`, 'entityType');
+  }
   const summary = requireNonEmptyString(raw.summary, 'summary').slice(0, 300);
 
   return {
@@ -423,7 +436,7 @@ export function validateActivityLogDoc(raw) {
     businessId: requireNonEmptyString(raw.businessId, 'businessId'),
     studioId: requireNonEmptyString(raw.studioId, 'studioId'),
     eventType,
-    entityType: ACTIVITY_ENTITY_TYPE.BOOKING,
+    entityType,
     entityId: requireNonEmptyString(raw.entityId, 'entityId'),
     operationId: requireNonEmptyString(raw.operationId, 'operationId'),
     actorUid: requireNonEmptyString(raw.actorUid, 'actorUid'),

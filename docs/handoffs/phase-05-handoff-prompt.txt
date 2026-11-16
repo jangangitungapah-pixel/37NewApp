@@ -1,0 +1,47 @@
+CONTEXT HANDOFF — 37MusicStudio Rebuild
+Target Phase: Phase 05 — Portal Collaboration & Notifications
+Repository: c:\Users\hazel\source\repos\37NewApp (branch: main)
+Baseline Prerequisites:
+- Read README.md, docs/checkpoints/phase-01-checkpoint.md through docs/checkpoints/phase-04-checkpoint.md, and relevant sections of C:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html (Section 10 `notifications` & `activityLogs`, Section 11, Section 14 Phase 05, Section 15 Cross-portal & Acceptance Criteria) BEFORE editing code.
+- Firebase Target Project: musicstudio37app (Database ID: "(default)", Edition: STANDARD, Spark plan only — no Cloud Functions, no Blaze, no external backend). NEVER touch existing Firebase projects or run `firebase deploy` unless explicitly requested by the user.
+
+WHAT WAS COMPLETED IN PHASE 04 (AVAILABLE NOW):
+1. Finance & Commission Domain Layer:
+   - `src/domain/enums/roles.js`: `PAYMENT_METHOD`, `LEDGER_ENTRY_TYPE`, `LEDGER_DIRECTION`, `COMMISSION_ENTRY_TYPE`, `COMMISSION_DIRECTION`, `COMMISSION_ENTRY_STATUS`, Phase 04 `ACTIVITY_EVENT_TYPE` / `ACTIVITY_ENTITY_TYPE`.
+   - `src/domain/validators/financeValidators.js`: deterministic ID builders (`settlement_payment__${bookingId}`, `commission_earned__${bookingId}`, `reversal__${entryId}`, `comm_reversal__${entryId}`), `validateSettlementInput`, `validateLedgerEntryDoc`, `validateCommissionEntryDoc`.
+   - `src/domain/calculations/financeMetricsCalculator.js`: `computeSettlementCommissionSnapshot` & strict 6-metric `computeFinanceSummary` (recognized revenue, payment received, outstanding, refund, net adjustment, net commission).
+2. Atomic Finance Repository, Use Cases & UI:
+   - `src/data/repositories/financeRepository.js` + `src/application/use-cases/financeUseCases.js`: `settleBookingTransaction` (`bookings -> SETTLED` + immutable `ledgerEntries` + `commissionEntries` + `activityLogs` atomically), `requestSettlementReviewTransaction`, `recordLedgerAdjustmentTransaction`, `recordCommissionAdjustmentTransaction`, plus Operator-scoped `subscribeCommissionEntriesInRange`.
+   - `src/features/finance/FinanceSettlementPage.jsx`, `SettleBookingModal.jsx`, `AdjustmentModal.jsx` mounted on `/owner/finance`; `OperatorCommissionsPage.jsx` mounted on `/operator/commissions`.
+3. Security Rules & Indexes (`firestore.rules` & `firestore.indexes.json`):
+   - `ledgerEntries` and `commissionEntries` are unlocked with strict `allow update, delete: if false;` immutability, Owner-only settlement via `MapDiff` + `existsAfter`, and Operator-scoped commission reads.
+   - `galleryAssets` & `notifications` remain locked `allow read, write: if false;`!
+
+REQUIRED DELIVERABLES FOR PHASE 05 (PORTAL COLLABORATION & NOTIFICATIONS):
+1. Domain Notification Contracts & Deterministic Delivery IDs (`src/domain/`):
+   - Define `NOTIFICATION_TYPE` (`BOOKING_CREATED`, `BOOKING_CONFIRMED`, `BOOKING_CANCELLED`, `BOOKING_RESCHEDULED`, `SESSION_COMPLETED`, `BOOKING_SETTLED`, `SETTLEMENT_REVIEW_REQUIRED`, `TEAM_ASSIGNMENT_UPDATED`) and `NOTIFICATION_CHANNEL` (`IN_APP`).
+   - Design deterministic IDs (e.g. `${type}__${entityId}__${recipientUid}` or `${operationId}__${recipientUid}`) so retried transactions or cross-portal actions do NOT generate duplicate notifications!
+   - Enforce strict recipient scoping: only business members with valid business/studio access to the referenced entity may receive notifications.
+2. In-App Notifications Repository, Fan-out Helpers & Read/Mark-Read Use Cases (`src/data/`, `src/application/`):
+   - Implement `notificationRepository.js` with:
+     - `subscribeMyNotifications({ businessId, recipientUid, onData, onError })` strictly filtering `where('recipientUid', '==', recipientUid)`, `orderBy('createdAt', 'desc')`, bounded `limit(30)` (Spark quota efficient!).
+     - `markNotificationRead` and `markAllNotificationsRead` updating `readAt: serverTimestamp()` cleanly.
+     - Safe non-blocking / atomic notification dispatch attached cleanly on booking lifecycle transitions, settlement, settlement review, and studio assignment updates — ensuring offline/failed notification fan-out NEVER leaves primary booking/settlement data corrupted (and handling client-side recipient list cleanly within Spark rules: Owners + assigned studio Operators or targeted recipient UID without violating member list privacy for Operators!).
+     - NOTE ON SPARK SECURITY FOR OPERATOR NOTIFICATION FAN-OUT: Remember Operators CANNOT list all business `members` (`allow list: if isOwner(businessId)` on `members`)! So examine honestly how Operator -> Owner notification targets work safely under Spark without relaxing `members` list privacy: e.g. storing `businesses/{businessId}.ownerUid` on the root `businesses/{businessId}` document (which active members CAN read via `getDoc` / `AuthSessionProvider`!) so Operators notify `business.ownerUid` cleanly on session completion / booking creation, while Owners (who CAN list `members`) notify assigned Operators on confirm/settlement/review/team-assignment! Document this clean design trade-off in `phase-05-checkpoint.md`!
+3. Cross-Portal Activity Timeline & Collaboration UI (`src/features/notifications/` & Portal Layouts):
+   - Interactive Notification Bell / Drawer in Owner & Operator topbars (unread badge count derived strictly from `subscribeMyNotifications`, mark-as-read on click, mark-all-read button, deep-link jump cleanly to booking/finance view!).
+   - Cross-portal Operational Activity Feed page or Dashboard panel (`/owner/activity` or `/operator/activity` + Dashboard feed) reading `activityLogs` safely scoped to `assignedStudioIds` for Operators and all business studios for Owners (`orderBy('createdAt', 'desc'), limit(40)`), with clean empty, loading, stale-cache, offline recovery states.
+   - Verify `SubscriptionRegistry` tracks notification & activity listeners and unsubscribes 100% cleanly on logout, business switch, or role revocation.
+4. Security Rules & Composite Indexes (`firestore.rules`, `firestore.indexes.json`):
+   - Unlock `businesses/{businessId}/notifications/{notificationId}`:
+     - `allow get, list`: ONLY `hasActiveMembership(businessId) && resource != null && resource.data.recipientUid == request.auth.uid` (nobody can read someone else's notifications!).
+     - `allow create`: Active member in business creating valid notification (`createdBy == request.auth.uid`, `createdAt == request.time`, `readAt == null`, bounded summary/title), respecting Operator restrictions (e.g. Operator cannot spam notifications for unassigned studios).
+     - `allow update`: ONLY `isSelf(resource.data.recipientUid) && hasActiveMembership(businessId)` and `diff(resource.data).affectedKeys().hasOnly(['readAt'])` (recipient can ONLY mark their own notification as read with `request.time`, cannot tamper with message/type/recipient!).
+     - `allow delete: if false;`
+   - Keep `galleryAssets/{assetId}` strictly locked (`allow read, write: if false;`) until Phase 06!
+   - Add composite index for `notifications`: `[recipientUid ASC, createdAt DESC]`, `[recipientUid ASC, readAt ASC, createdAt DESC]`, plus `[createdAt DESC]` on `activityLogs` for Owner global timeline!
+5. Verification & Gate Requirements Before Stopping at End of Phase 05:
+   - Unit tests: notification schema validators, deterministic IDs, unread count/filter selectors, listener cleanup/registry tests.
+   - Firestore Emulator Rules tests (`npm run test:rules`): cross-user notification read denied, modifying anything except own `readAt` denied, hard delete denied, Owner vs Operator `activityLogs` cross-studio isolation verified, `galleryAssets` still strictly locked.
+   - `npm run lint`, `npm run test:unit`, `npm run test:rules`, `npm run build` all pass cleanly.
+   - Timestamped verification `.txt` log saved in `logs/`, git commit on `main`, `README.md` updated, `docs/checkpoints/phase-05-checkpoint.md` and `docs/handoffs/phase-06-handoff-prompt.txt` written, then STOP before Phase 06.

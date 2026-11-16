@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  ArrowRight,
   Ban,
   CalendarClock,
   CheckCircle2,
@@ -15,7 +17,7 @@ import {
   computeBookingSlotPlan,
   formatDateKeyLabel,
 } from '../../domain/calculations/slotGenerator.js';
-import { BOOKING_STATUS, SETTING_IDS } from '../../domain/enums/roles.js';
+import { BOOKING_STATUS, ROLES, SETTING_IDS } from '../../domain/enums/roles.js';
 import { canOperateStudioBooking } from '../../domain/policies/accessPolicy.js';
 import {
   rescheduleBookingUseCase,
@@ -308,10 +310,31 @@ export function BookingDetailModal({
             </div>
           )}
 
-          {booking.status === BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT && (
-            <div className="alert alert-warning" style={{ padding: '8px 12px', fontSize: '12px' }}>
+          {(booking.status === BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT ||
+            booking.status === BOOKING_STATUS.SETTLEMENT_REVIEW) && (
+            <div className="alert alert-warning" style={{ padding: '8px 12px', fontSize: '12px', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
               <span>
-                Sesi selesai. Settlement final & pencatatan ledger/komisi dikunci sampai Phase 04.
+                {booking.status === BOOKING_STATUS.SETTLEMENT_REVIEW
+                  ? `Perlu review settlement Owner${booking.settlement?.reviewReason ? `: ${booking.settlement.reviewReason}` : '.'}`
+                  : 'Sesi selesai dan masuk antrean final settlement Owner.'}
+              </span>
+              {member?.role === ROLES.OWNER && (
+                <Link to="/owner/finance" className="btn btn-primary btn-sm" onClick={onClose}>
+                  <span>Review & Settle</span>
+                  <ArrowRight size={13} aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+          )}
+
+          {booking.status === BOOKING_STATUS.SETTLED && booking.settlement && (
+            <div className="alert alert-success" style={{ padding: '8px 12px', fontSize: '12px' }}>
+              <span>
+                Settled ({booking.settlement.paymentMethod}) · Dibayar{' '}
+                <strong>{formatIdr(booking.settlement.paidAmountMinor)}</strong>
+                {booking.settlement.settlementReference
+                  ? ` · Ref: ${booking.settlement.settlementReference}`
+                  : ''}
               </span>
             </div>
           )}

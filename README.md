@@ -18,7 +18,7 @@ Rebuild modular aplikasi manajemen studio musik **37MusicStudio** dari nol denga
 | **01** | Application Foundation & Firebase Security | Selesai | [Checkpoint Phase 01](docs/checkpoints/phase-01-checkpoint.md) · [Handoff Phase 02](docs/handoffs/phase-02-handoff-prompt.txt) |
 | **02** | Business Master Data | Selesai | [Checkpoint Phase 02](docs/checkpoints/phase-02-checkpoint.md) · [Handoff Phase 03](docs/handoffs/phase-03-handoff-prompt.txt) |
 | **03** | Booking Engine & Calendar | Selesai | [Checkpoint Phase 03](docs/checkpoints/phase-03-checkpoint.md) · [Handoff Phase 04](docs/handoffs/phase-04-handoff-prompt.txt) |
-| **04** | Session, Settlement, Ledger & Commission | Belum Dimulai | — |
+| **04** | Session, Settlement, Ledger & Commission | Selesai | [Checkpoint Phase 04](docs/checkpoints/phase-04-checkpoint.md) · [Handoff Phase 05](docs/handoffs/phase-05-handoff-prompt.txt) |
 | **05** | Portal Collaboration & Notifications | Belum Dimulai | — |
 | **06** | Gallery & Cloudinary | Belum Dimulai | — |
 | **07** | Dashboard, Analytics & Reporting | Belum Dimulai | — |

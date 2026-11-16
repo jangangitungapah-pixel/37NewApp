@@ -110,10 +110,53 @@ export const ACTIVITY_EVENT_TYPE = Object.freeze({
   BOOKING_CANCELLED: 'booking.cancelled',
   BOOKING_NO_SHOW: 'booking.no_show',
   BOOKING_RESCHEDULED: 'booking.rescheduled',
+  BOOKING_SETTLED: 'booking.settled',
+  BOOKING_SETTLEMENT_REVIEW: 'booking.settlement_review',
+  LEDGER_ADJUSTED: 'ledger.adjusted',
+  COMMISSION_ADJUSTED: 'commission.adjusted',
 });
 
 export const ACTIVITY_ENTITY_TYPE = Object.freeze({
   BOOKING: 'booking',
+  LEDGER_ENTRY: 'ledger_entry',
+  COMMISSION_ENTRY: 'commission_entry',
+});
+
+export const PAYMENT_METHOD = Object.freeze({
+  CASH: 'cash',
+  TRANSFER: 'transfer',
+  QRIS: 'qris',
+  CARD: 'card',
+  OTHER: 'other',
+});
+
+export const LEDGER_ENTRY_TYPE = Object.freeze({
+  PAYMENT_RECEIVED: 'PAYMENT_RECEIVED',
+  REFUND: 'REFUND',
+  ADJUSTMENT: 'ADJUSTMENT',
+  REVERSAL: 'REVERSAL',
+});
+
+export const LEDGER_DIRECTION = Object.freeze({
+  INFLOW: 'inflow',
+  OUTFLOW: 'outflow',
+});
+
+export const COMMISSION_ENTRY_TYPE = Object.freeze({
+  EARNED: 'EARNED',
+  ADJUSTMENT: 'ADJUSTMENT',
+  REVERSAL: 'REVERSAL',
+});
+
+export const COMMISSION_DIRECTION = Object.freeze({
+  CREDIT: 'credit',
+  DEBIT: 'debit',
+});
+
+export const COMMISSION_ENTRY_STATUS = Object.freeze({
+  RECORDED: 'RECORDED',
+  ADJUSTED: 'ADJUSTED',
+  REVERSED: 'REVERSED',
 });
 
 export const SCHEMA_VERSIONS = Object.freeze({
@@ -128,6 +171,8 @@ export const SCHEMA_VERSIONS = Object.freeze({
   BOOKING: 1,
   BOOKING_SLOT: 1,
   ACTIVITY_LOG: 1,
+  LEDGER_ENTRY: 1,
+  COMMISSION_ENTRY: 1,
 });
 
 export const OPERATOR_DEFAULT_PERMISSIONS = Object.freeze({
