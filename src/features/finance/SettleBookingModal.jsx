@@ -108,7 +108,7 @@ export function SettleBookingModal({
             padding: '12px',
             display: 'grid',
             gap: '6px',
-            background: 'rgba(13, 18, 28, 0.78)',
+            background: 'var(--bg-input)',
             fontSize: '13px',
           }}
         >

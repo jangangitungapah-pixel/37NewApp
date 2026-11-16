@@ -259,7 +259,7 @@ export function BookingDetailModal({
             padding: '14px',
             display: 'grid',
             gap: '10px',
-            background: 'rgba(13, 18, 28, 0.78)',
+            background: 'var(--bg-input)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -308,7 +308,7 @@ export function BookingDetailModal({
           )}
 
           {booking.cancelReason && (
-            <div style={{ fontSize: '13px', color: '#ffd0d0', borderTop: '1px solid var(--border-subtle)', paddingTop: '8px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--destructive)', borderTop: '1px solid var(--border-subtle)', paddingTop: '8px' }}>
               Alasan ({booking.status}): {booking.cancelReason}
             </div>
           )}

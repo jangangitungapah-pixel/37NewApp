@@ -97,7 +97,7 @@ export function AdjustmentModal({
 
         {errorMessage && <StatusAlert variant="danger" title="Gagal" message={errorMessage} />}
 
-        <div className="panel" style={{ padding: '12px', fontSize: '13px', background: 'rgba(13, 18, 28, 0.78)' }}>
+        <div className="panel" style={{ padding: '12px', fontSize: '13px', background: 'var(--bg-input)' }}>
           <div>
             Entry Asal: <code className="mono">{originalEntry.entryId}</code>
           </div>

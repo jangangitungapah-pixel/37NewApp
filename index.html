@@ -3,13 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#090c12" />
     <meta
       name="description"
       content="Platform manajemen operasional studio musik 37MusicStudio: booking kalender, settlement ledger, komisi operator, galeri Cloudinary, dan analitik Spark-safe."
     />
     <title>37MusicStudio — Studio Operations Platform</title>
+    <script>
+      (function () {
+        try {
+          var key = '37ms-ui-theme';
+          var stored = window.localStorage.getItem(key) || 'system';
+          var systemDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var effective = stored === 'dark' || (stored === 'system' && systemDark) ? 'dark' : 'light';
+          var root = document.documentElement;
+          root.classList.toggle('dark', effective === 'dark');
+          root.setAttribute('data-theme', effective);
+          root.style.colorScheme = effective;
+          var metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) {
+            metaTheme.setAttribute('content', effective === 'dark' ? '#0e1118' : '#fafafb');
+          }
+        } catch (e) {
+          // Ignore storage access errors in restricted iframes
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

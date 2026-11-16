@@ -564,7 +564,7 @@ export function CreateBookingModal({
                 padding: '14px',
                 display: 'grid',
                 gap: '6px',
-                background: 'rgba(13, 18, 28, 0.78)',
+                background: 'var(--bg-input)',
               }}
             >
               {previewQuote.valid ? (

@@ -137,8 +137,8 @@ export function MetricTrendChart({ points = [], isOwner = false }) {
                     : isSelected
                       ? 'var(--accent-brass)'
                       : safeMetric === METRIC_OPTIONS.BOOKINGS
-                        ? '#38bdf8'
-                        : '#22c55e';
+                        ? 'var(--info)'
+                        : 'var(--success)';
                 const tooltipValue =
                   safeMetric === METRIC_OPTIONS.BOOKINGS
                     ? `${bar.value} booking (${bar.bookedMinutes} mnt)`

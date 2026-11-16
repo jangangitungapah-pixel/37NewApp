@@ -58,7 +58,7 @@ export function StudioUtilizationPanel({ studios = [], isOwner = false, overallP
                   width: '100%',
                   height: '8px',
                   borderRadius: '999px',
-                  background: 'rgba(148, 163, 184, 0.2)',
+                  background: 'var(--muted)',
                   overflow: 'hidden',
                 }}
                 role="progressbar"
@@ -73,10 +73,10 @@ export function StudioUtilizationPanel({ studios = [], isOwner = false, overallP
                     height: '100%',
                     background:
                       row.utilizationPercent >= 75
-                        ? '#22c55e'
+                        ? 'var(--success)'
                         : row.utilizationPercent >= 35
                           ? 'var(--accent-brass)'
-                          : '#38bdf8',
+                          : 'var(--info)',
                     transition: 'width 200ms ease',
                   }}
                 />

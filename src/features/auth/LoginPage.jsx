@@ -6,6 +6,7 @@ import {
 } from '../../application/use-cases/sessionUseCases.js';
 import { mapFirebaseError } from '../../data/firebase/errorMapper.js';
 import { useAuthSession } from '../../app/providers/authSessionContext.js';
+import { ThemeToggle } from '../../components/navigation/ThemeToggle.jsx';
 import { StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 
 export function LoginPage() {
@@ -51,14 +52,17 @@ export function LoginPage() {
     <main className="auth-page">
       <section className="panel auth-card" style={{ display: 'grid', gap: '18px' }}>
         <header style={{ display: 'grid', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
             <span className="badge badge-warning">
               <Disc3 size={14} aria-hidden="true" />
               <span>37MusicStudio</span>
             </span>
-            <span className="badge mono" style={{ fontSize: '11px' }}>
-              {appConfig.firebase.projectId} ({appConfig.firebase.databaseId})
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge mono" style={{ fontSize: '11px' }}>
+                {appConfig.firebase.projectId} ({appConfig.firebase.databaseId})
+              </span>
+              <ThemeToggle mode="compact" />
+            </div>
           </div>
           <h1 style={{ margin: 0, fontSize: '24px', lineHeight: 1.2 }}>
             {mode === 'login' ? 'Masuk ke Portal Studio' : 'Setup Bisnis Owner Baru'}

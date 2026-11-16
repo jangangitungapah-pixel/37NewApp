@@ -30,3 +30,12 @@ Rebuild modular aplikasi manajemen studio musik **37MusicStudio** dari nol denga
 - [Audit Discovery Awal (Phase 00)](docs/audit/phase-00-discovery-audit.md)
 - [Architecture Decision Record 0001 — Architecture Lock](docs/adr/0001-architecture-lock.md)
 - [Rebuild Plan, Scope & Risk Register](docs/architecture/rebuild-plan-and-risks.md)
+
+## Dokumentasi UI Foundation 2026
+
+- [Audit Pra-Implementasi UI Foundation](docs/audit/ui-foundation-audit.md)
+- [UI Foundation Architecture](docs/ui-foundation/UI_FOUNDATION_ARCHITECTURE.md)
+- [UI Design Tokens (OKLCH Light/Dark)](docs/ui-foundation/UI_DESIGN_TOKENS.md)
+- [UI Component Guidelines](docs/ui-foundation/UI_COMPONENT_GUIDELINES.md)
+- [UI Theme Guidelines](docs/ui-foundation/UI_THEME_GUIDELINES.md)
+- [UI Dependency Reference](docs/ui-foundation/UI_DEPENDENCY_REFERENCE.md)

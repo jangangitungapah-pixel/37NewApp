@@ -53,7 +53,7 @@ export function ModalDialog({ open, title, description, onClose, children }) {
               {title}
             </h2>
             {description && (
-              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              <p className="mt-1 text-xs text-muted-foreground">
                 {description}
               </p>
             )}

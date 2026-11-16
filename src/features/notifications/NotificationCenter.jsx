@@ -213,7 +213,7 @@ export function NotificationCenter() {
             )}
           </div>
 
-          <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border-subtle)', background: 'rgba(13, 18, 28, 0.7)' }}>
+          <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-input)' }}>
             <button
               type="button"
               className="btn btn-sm"

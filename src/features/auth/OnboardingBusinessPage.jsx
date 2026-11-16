@@ -3,6 +3,7 @@ import { Building2, Check, Copy, LogOut } from 'lucide-react';
 import { useAuthSession } from '../../app/providers/authSessionContext.js';
 import { createInitialBusinessUseCase } from '../../application/use-cases/sessionUseCases.js';
 import { mapFirebaseError } from '../../data/firebase/errorMapper.js';
+import { ThemeToggle } from '../../components/navigation/ThemeToggle.jsx';
 import { StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 
 /**
@@ -50,9 +51,12 @@ export function OnboardingBusinessPage() {
   return (
     <main className="auth-page">
       <section className="panel auth-card" style={{ display: 'grid', gap: '16px' }}>
-        <div className="badge badge-info" style={{ width: 'fit-content' }}>
-          <Building2 size={14} aria-hidden="true" />
-          <span>Keanggotaan Bisnis Belum Ditemukan</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="badge badge-info" style={{ width: 'fit-content' }}>
+            <Building2 size={14} aria-hidden="true" />
+            <span>Keanggotaan Bisnis Belum Ditemukan</span>
+          </div>
+          <ThemeToggle mode="compact" />
         </div>
         <h1 style={{ margin: 0, fontSize: '22px' }}>Belum Terhubung ke Studio</h1>
         <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '14px' }}>

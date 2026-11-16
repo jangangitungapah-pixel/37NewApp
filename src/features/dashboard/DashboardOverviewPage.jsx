@@ -461,7 +461,7 @@ export function DashboardOverviewPage({ portalRole }) {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                   Recognized Revenue (Settled)
                 </span>
-                <strong className="mono" style={{ fontSize: '20px', color: '#22c55e' }}>
+                <strong className="mono" style={{ fontSize: '20px', color: 'var(--success)' }}>
                   {formatIdr(analytics.financeSummary.recognizedRevenueMinor)}
                 </strong>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -539,7 +539,7 @@ export function DashboardOverviewPage({ portalRole }) {
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                   Komisi Bersih Saya
                 </span>
-                <strong className="mono" style={{ fontSize: '22px', color: '#22c55e' }}>
+                <strong className="mono" style={{ fontSize: '22px', color: 'var(--success)' }}>
                   {formatIdr(analytics.personalCommissionSummary.netCommissionMinor)}
                 </strong>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>

@@ -426,7 +426,7 @@ export function FinanceSettlementPage() {
                             {meta.label}
                           </span>
                           {b.status === BOOKING_STATUS.SETTLEMENT_REVIEW && b.settlement?.reviewReason && (
-                            <div style={{ fontSize: '11px', color: '#ffd0d0', marginTop: '4px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--destructive)', marginTop: '4px' }}>
                               Review: {b.settlement.reviewReason}
                             </div>
                           )}

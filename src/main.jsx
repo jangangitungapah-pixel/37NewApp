@@ -1,7 +1,16 @@
+import '@fontsource/geist-sans/400.css';
+import '@fontsource/geist-sans/500.css';
+import '@fontsource/geist-sans/600.css';
+import '@fontsource/geist-sans/700.css';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/inter/latin-700.css';
+import './styles/themes.css';
+import './styles/globals.css';
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import './shared/styles/tokens.css';
-import './shared/styles/global.css';
 import { App } from './app/bootstrap/App.jsx';
 
 createRoot(document.getElementById('root')).render(
