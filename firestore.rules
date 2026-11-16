@@ -618,9 +618,13 @@ service cloud.firestore {
             && newData.actualEndByName is string
             && newData.completedAt == request.time
             && newData.actualDurationMinutes is int
-            && newData.actualDurationMinutes == math.floor(
+            && newData.actualDurationMinutes >= math.floor(
               (request.time.toMillis() - oldData.actualStartAt.toMillis()) / 60000
-            )
+            ) - 1
+            && newData.actualDurationMinutes <= math.floor(
+              (request.time.toMillis() - oldData.actualStartAt.toMillis()) / 60000
+            ) + 1
+            && newData.actualDurationMinutes <= 10080
             && newData.diff(oldData).affectedKeys().hasOnly([
               'status', 'sessionStatus', 'actualEndAt', 'actualEndByUid', 'actualEndByName',
               'actualDurationMinutes', 'completedAt',
@@ -1135,7 +1139,7 @@ service cloud.firestore {
               canOperateStudioBooking(businessId, resource.data.studioId)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                 'status', 'cancelReason', 'cancelledBy', 'cancelledAt',
-                'checkedInAt', 'completedAt', 'updatedBy', 'updatedAt',
+                'checkedInAt', 'completedAt', 'sessionStatus', 'updatedBy', 'updatedAt',
                 'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
               ])
               && (
