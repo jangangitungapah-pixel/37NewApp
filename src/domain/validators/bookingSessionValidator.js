@@ -3,7 +3,11 @@ import {
   SESSION_ACTION,
   SESSION_STATUS,
 } from '../enums/roles.js';
-import { DomainValidationError } from './schemaValidators.js';
+import {
+  DomainValidationError,
+  optionalStringOrNull,
+  requireNonEmptyString,
+} from './schemaValidators.js';
 import { zonedDateTimeToDate } from '../calculations/slotGenerator.js';
 
 export const NO_SHOW_GRACE_MINUTES = 15;
@@ -167,4 +171,65 @@ export function assertSessionActionAllowed({
     default:
       throw new DomainValidationError(`Aksi sesi tidak dikenal: ${action}`, 'action');
   }
+}
+
+
+const VALID_SESSION_ACTIONS = new Set(Object.values(SESSION_ACTION));
+const VALID_SESSION_STATUSES = new Set(Object.values(SESSION_STATUS));
+
+/**
+ * Validates append-only business-scoped booking session history.
+ * Timestamp normalization is handled by the Firestore mapper.
+ */
+export function validateBookingSessionEventDoc(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new DomainValidationError('Dokumen riwayat sesi tidak valid.', 'event');
+  }
+
+  const action = requireNonEmptyString(raw.action, 'action');
+  if (!VALID_SESSION_ACTIONS.has(action)) {
+    throw new DomainValidationError(`Aksi riwayat sesi tidak dikenal: ${action}`, 'action');
+  }
+
+  const fromStatus = requireNonEmptyString(raw.fromStatus, 'fromStatus');
+  const toStatus = requireNonEmptyString(raw.toStatus, 'toStatus');
+  if (!VALID_SESSION_STATUSES.has(fromStatus) || !VALID_SESSION_STATUSES.has(toStatus)) {
+    throw new DomainValidationError('Status awal/akhir riwayat sesi tidak valid.', 'fromStatus');
+  }
+
+  const actorRole = requireNonEmptyString(raw.actorRole, 'actorRole');
+  if (!['owner', 'operator'].includes(actorRole)) {
+    throw new DomainValidationError('Role aktor riwayat sesi tidak valid.', 'actorRole');
+  }
+
+  const payloadHash = requireNonEmptyString(raw.payloadHash, 'payloadHash');
+  if (!/^[a-f0-9]{16,64}$/.test(payloadHash)) {
+    throw new DomainValidationError('Hash payload operasi sesi tidak valid.', 'payloadHash');
+  }
+
+  const reason = optionalStringOrNull(raw.reason, 'reason');
+  if (reason && reason.length > 300) {
+    throw new DomainValidationError('Alasan aksi sesi maksimal 300 karakter.', 'reason');
+  }
+
+  return {
+    eventId: requireNonEmptyString(raw.eventId, 'eventId'),
+    businessId: requireNonEmptyString(raw.businessId, 'businessId'),
+    bookingId: requireNonEmptyString(raw.bookingId, 'bookingId'),
+    studioId: requireNonEmptyString(raw.studioId, 'studioId'),
+    action,
+    fromStatus,
+    toStatus,
+    actorUid: requireNonEmptyString(raw.actorUid, 'actorUid'),
+    actorRole,
+    actorName: requireNonEmptyString(raw.actorName, 'actorName'),
+    reason,
+    operationId: requireNonEmptyString(raw.operationId, 'operationId'),
+    requestId: requireNonEmptyString(raw.requestId, 'requestId'),
+    payloadHash,
+    schemaVersion: Number.isSafeInteger(raw.schemaVersion) && raw.schemaVersion >= 1
+      ? raw.schemaVersion
+      : 1,
+    createdAt: raw.createdAt ?? null,
+  };
 }
