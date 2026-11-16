@@ -2100,7 +2100,8 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && (
             (
-              request.resource.data.status == 'active'
+              resource.data.status == 'released'
+              && request.resource.data.status == 'active'
               && request.resource.data.bookingId is string
               && request.resource.data.reservedBy == request.auth.uid
               && request.resource.data.reservedAt == request.time
@@ -2109,12 +2110,17 @@ service cloud.firestore {
                 request.resource.data.studioId, slotId,
                 ['booking.create', 'booking.reschedule']
               )
-              && (
-                resource.data.status == 'released'
-                || (
-                  resource.data.status == 'active'
-                  && resource.data.bookingId == request.resource.data.bookingId
-                )
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && resource.data.bookingId == request.resource.data.bookingId
+              && request.resource.data.reservedBy == resource.data.reservedBy
+              && request.resource.data.reservedAt == resource.data.reservedAt
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.reschedule']
               )
             )
             || (
@@ -3136,7 +3142,8 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && (
             (
-              request.resource.data.status == 'active'
+              resource.data.status == 'released'
+              && request.resource.data.status == 'active'
               && request.resource.data.bookingId is string
               && request.resource.data.reservedBy == request.auth.uid
               && request.resource.data.reservedAt == request.time
@@ -3145,12 +3152,17 @@ service cloud.firestore {
                 request.resource.data.studioId, slotId,
                 ['booking.create', 'booking.reschedule']
               )
-              && (
-                resource.data.status == 'released'
-                || (
-                  resource.data.status == 'active'
-                  && resource.data.bookingId == request.resource.data.bookingId
-                )
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && resource.data.bookingId == request.resource.data.bookingId
+              && request.resource.data.reservedBy == resource.data.reservedBy
+              && request.resource.data.reservedAt == resource.data.reservedAt
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.reschedule']
               )
             )
             || (
@@ -3384,7 +3396,8 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && (
             (
-              request.resource.data.status == 'active'
+              resource.data.status == 'released'
+              && request.resource.data.status == 'active'
               && request.resource.data.bookingId is string
               && request.resource.data.reservedBy == request.auth.uid
               && request.resource.data.reservedAt == request.time
@@ -3393,12 +3406,17 @@ service cloud.firestore {
                 request.resource.data.studioId, slotId,
                 ['booking.create', 'booking.reschedule']
               )
-              && (
-                resource.data.status == 'released'
-                || (
-                  resource.data.status == 'active'
-                  && resource.data.bookingId == request.resource.data.bookingId
-                )
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && resource.data.bookingId == request.resource.data.bookingId
+              && request.resource.data.reservedBy == resource.data.reservedBy
+              && request.resource.data.reservedAt == resource.data.reservedAt
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.reschedule']
               )
             )
             || (
@@ -4154,7 +4172,8 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && (
             (
-              request.resource.data.status == 'active'
+              resource.data.status == 'released'
+              && request.resource.data.status == 'active'
               && request.resource.data.bookingId is string
               && request.resource.data.reservedBy == request.auth.uid
               && request.resource.data.reservedAt == request.time
@@ -4163,12 +4182,17 @@ service cloud.firestore {
                 request.resource.data.studioId, slotId,
                 ['booking.create', 'booking.reschedule']
               )
-              && (
-                resource.data.status == 'released'
-                || (
-                  resource.data.status == 'active'
-                  && resource.data.bookingId == request.resource.data.bookingId
-                )
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && resource.data.bookingId == request.resource.data.bookingId
+              && request.resource.data.reservedBy == resource.data.reservedBy
+              && request.resource.data.reservedAt == resource.data.reservedAt
+              && hasMatchingSlotReservationAfter(
+                businessId, request.resource.data.bookingId,
+                request.resource.data.studioId, slotId,
+                ['booking.reschedule']
               )
             )
             || (
