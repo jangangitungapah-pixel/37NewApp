@@ -23,7 +23,7 @@ Rebuild modular aplikasi manajemen studio musik **37MusicStudio** dari nol denga
 | **05** | Portal Collaboration & Notifications | Selesai | [Checkpoint Phase 05](docs/checkpoints/phase-05-checkpoint.md) · [Handoff Phase 06](docs/handoffs/phase-06-handoff-prompt.txt) |
 | **06** | Gallery & Cloudinary | Selesai | [Checkpoint Phase 06](docs/checkpoints/phase-06-checkpoint.md) · [Handoff Phase 07](docs/handoffs/phase-07-handoff-prompt.txt) |
 | **07** | Dashboard, Analytics & Reporting | Selesai | [Checkpoint Phase 07](docs/checkpoints/phase-07-checkpoint.md) · [Handoff Phase 08](docs/handoffs/phase-08-handoff-prompt.txt) |
-| **08** | Hardening, Accessibility & Production Readiness | Belum Dimulai | — |
+| **08** | Hardening, Accessibility & Production Readiness | Selesai | [Checkpoint Phase 08](docs/checkpoints/phase-08-checkpoint.md) · [Deployment Checklist](docs/runbooks/production-deployment-checklist.md) |
 
 ## Dokumen Arsitektur Phase 00
 

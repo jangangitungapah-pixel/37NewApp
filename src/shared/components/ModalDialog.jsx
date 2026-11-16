@@ -1,19 +1,33 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
 /**
- * Accessible overlay dialog rendered above Sticky/Drawer chrome with Esc-to-close.
+ * Accessible overlay dialog rendered above Sticky/Drawer chrome with Esc-to-close,
+ * background scroll lock, unique heading ID, and focus restoration on close.
  */
 export function ModalDialog({ open, title, description, onClose, children }) {
+  const titleId = useId();
+  const previousFocusRef = useRef(null);
+
   useEffect(() => {
     if (!open) return undefined;
+
+    previousFocusRef.current = document.activeElement;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+      previousFocusRef.current?.focus?.();
+    };
   }, [open, onClose]);
 
   if (!open) {
@@ -25,7 +39,7 @@ export function ModalDialog({ open, title, description, onClose, children }) {
       className="modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="modal-dialog-title"
+      aria-labelledby={titleId}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -35,7 +49,7 @@ export function ModalDialog({ open, title, description, onClose, children }) {
       <div className="modal-panel" style={{ display: 'grid', gap: '16px' }}>
         <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div>
-            <h2 id="modal-dialog-title" style={{ margin: 0, fontSize: '18px' }}>
+            <h2 id={titleId} style={{ margin: 0, fontSize: '18px' }}>
               {title}
             </h2>
             {description && (

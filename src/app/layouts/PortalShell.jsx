@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Disc3, LogOut, Menu, X } from 'lucide-react';
 import { useAuthSession } from '../providers/authSessionContext.js';
@@ -14,8 +14,22 @@ export function PortalShell({ portalLabel, portalBadgeVariant = 'warning', navIt
 
   const closeDrawer = () => setDrawerOpen(false);
 
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setDrawerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [drawerOpen]);
+
   return (
     <div className="portal-shell">
+      <a href="#main-content" className="skip-link">
+        Lewati ke konten utama
+      </a>
       <div
         className={`drawer-backdrop ${drawerOpen ? 'open' : ''}`}
         onClick={closeDrawer}
@@ -61,7 +75,7 @@ export function PortalShell({ portalLabel, portalBadgeVariant = 'warning', navIt
             </button>
           </div>
 
-          <nav style={{ display: 'grid', gap: '4px' }}>
+          <nav aria-label="Menu Portal" style={{ display: 'grid', gap: '4px' }}>
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -112,7 +126,7 @@ export function PortalShell({ portalLabel, portalBadgeVariant = 'warning', navIt
           </div>
         </header>
 
-        <main className="portal-content">
+        <main id="main-content" className="portal-content" tabIndex={-1}>
           <ConnectionBanner isOnline={isOnline} fromCache={fromCache} />
           {error && (
             <div style={{ marginBottom: '16px' }}>

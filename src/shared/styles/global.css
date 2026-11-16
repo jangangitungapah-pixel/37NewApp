@@ -39,6 +39,25 @@ code,
   outline-offset: 2px;
 }
 
+.skip-link {
+  position: fixed;
+  top: -120px;
+  left: 16px;
+  z-index: 95;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: var(--accent-brass);
+  color: var(--text-inverse);
+  font-weight: 700;
+  font-size: 13px;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 16px;
+  text-decoration: none;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -113,9 +132,11 @@ code,
   transition: border-color 0.15s ease;
 }
 
-.field-input:focus {
-  outline: none;
+.field-input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
   border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(245, 184, 100, 0.18);
 }
 
 .field-error {
@@ -788,5 +809,24 @@ code,
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .portal-shell,
+  .portal-main {
+    overflow-x: clip;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .modal-panel {
+    padding: 16px;
+  }
+
+  .page-title {
+    font-size: 20px;
   }
 }

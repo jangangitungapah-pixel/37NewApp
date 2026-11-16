@@ -1,5 +1,6 @@
 import React from 'react';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Home, RotateCcw } from 'lucide-react';
+import { logger } from '../../infrastructure/logging/logger.js';
 
 /**
  * Top-level Error Boundary protecting portals against uncaught UI crashes.
@@ -17,8 +18,19 @@ export class ErrorBoundary extends React.Component {
     };
   }
 
+  componentDidCatch(error, errorInfo) {
+    logger.error('ui', 'Uncaught render error in ErrorBoundary', {
+      message: error?.message || 'unknown',
+      componentStack: errorInfo?.componentStack ? errorInfo.componentStack.slice(0, 300) : '',
+    });
+  }
+
   handleReload = () => {
     window.location.reload();
+  };
+
+  handleGoHome = () => {
+    window.location.assign('/');
   };
 
   render() {
@@ -34,10 +46,16 @@ export class ErrorBoundary extends React.Component {
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '14px' }}>
               {this.state.message}
             </p>
-            <button type="button" className="btn btn-primary" onClick={this.handleReload}>
-              <RotateCcw size={16} aria-hidden="true" />
-              <span>Muat Ulang Aplikasi</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-primary" onClick={this.handleReload}>
+                <RotateCcw size={16} aria-hidden="true" />
+                <span>Muat Ulang Aplikasi</span>
+              </button>
+              <button type="button" className="btn" onClick={this.handleGoHome}>
+                <Home size={16} aria-hidden="true" />
+                <span>Kembali ke Beranda</span>
+              </button>
+            </div>
           </section>
         </main>
       );
