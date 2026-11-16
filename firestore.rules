@@ -1103,8 +1103,10 @@ service cloud.firestore {
           || (
             hasActiveMembership(businessId)
             && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
-            && resource != null
-            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
           );
 
         allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
@@ -1248,8 +1250,10 @@ service cloud.firestore {
           || (
             hasActiveMembership(businessId)
             && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
-            && resource != null
-            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
           );
         allow list: if false;
 
