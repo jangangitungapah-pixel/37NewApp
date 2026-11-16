@@ -1,4 +1,5 @@
 import {
+  BOOKING_OPERATION_TYPE,
   BOOKING_STATUS,
   NOTIFICATION_TYPE,
   ROLES,
@@ -20,10 +21,13 @@ import {
 import { AppError, ERROR_CATEGORY } from '../../data/firebase/errorMapper.js';
 import {
   createBookingTransaction,
-  generateNewBookingId,
   rescheduleBookingTransaction,
   transitionBookingStatusTransaction,
 } from '../../data/repositories/bookingRepository.js';
+import {
+  clearOperationContext,
+  getOrCreateOperationContext,
+} from '../../shared/utils/bookingOperationIds.js';
 import { dispatchNotificationSafeUseCase } from './notificationUseCases.js';
 
 function resolveCrossPortalTargets({ member, businessOwnerUid, booking }) {
@@ -93,7 +97,24 @@ export async function createBookingUseCase({
     });
   }
 
-  const bookingId = generateNewBookingId(member.businessId);
+  const operationContext = await getOrCreateOperationContext({
+    businessId: member.businessId,
+    actorUid: member.uid,
+    operationType: BOOKING_OPERATION_TYPE.CREATE,
+    payload: {
+      studioId: studio.studioId,
+      serviceId: service.serviceId,
+      customerId: customer.customerId,
+      operatorUid: operatorUid || member.uid,
+      dateKey,
+      startTime,
+      durationMinutes,
+      discountMinor: normalizedDiscount,
+      notes: notes || null,
+      initialStatus: requestedInitialStatus || bookingPolicySetting?.defaultInitialStatus || 'CONFIRMED',
+    },
+  });
+  const bookingId = `bk_${operationContext.operationId.slice(-48)}`;
   const { booking, slotPlan } = buildValidatedNewBookingPayload({
     bookingId,
     businessId: member.businessId,
@@ -122,7 +143,9 @@ export async function createBookingUseCase({
     slotPlan,
     actorUid: member.uid,
     actorRole: member.role,
+    operationContext,
   });
+  clearOperationContext(operationContext);
 
   const recipients = resolveCrossPortalTargets({
     member,
@@ -173,6 +196,16 @@ export async function transitionBookingStatusUseCase({
     }
   }
 
+  const operationContext = await getOrCreateOperationContext({
+    businessId: member.businessId,
+    actorUid: member.uid,
+    operationType: BOOKING_OPERATION_TYPE.DECISION,
+    payload: {
+      bookingId: booking.bookingId,
+      targetStatus,
+      reason: typeof reason === 'string' ? reason.trim() : null,
+    },
+  });
   const updated = await transitionBookingStatusTransaction({
     businessId: member.businessId,
     bookingId: booking.bookingId,
@@ -180,7 +213,9 @@ export async function transitionBookingStatusUseCase({
     reason,
     actorUid: member.uid,
     actorRole: member.role,
+    operationContext,
   });
+  clearOperationContext(operationContext);
 
   const typeByStatus = {
     [BOOKING_STATUS.CONFIRMED]: NOTIFICATION_TYPE.BOOKING_CONFIRMED,
@@ -317,16 +352,34 @@ export async function rescheduleBookingUseCase({
     };
   }
 
+  const resolvedReason = reason || `Reschedule jadwal ke ${newDateKey} ${newStartTime}`;
+  const operationContext = await getOrCreateOperationContext({
+    businessId: member.businessId,
+    actorUid: member.uid,
+    operationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+    payload: {
+      bookingId: booking.bookingId,
+      studioId: booking.studioId,
+      newDateKey,
+      newStartTime,
+      durationMinutes: targetDuration,
+      reason: resolvedReason,
+      priceSnapshot: newPriceSnapshot,
+      commissionSnapshot: newCommissionSnapshot,
+    },
+  });
   const updated = await rescheduleBookingTransaction({
     businessId: member.businessId,
     bookingId: booking.bookingId,
     newSlotPlan,
     newPriceSnapshot,
     newCommissionSnapshot,
-    reason: reason || `Reschedule jadwal ke ${newDateKey} ${newStartTime}`,
+    reason: resolvedReason,
     actorUid: member.uid,
     actorRole: member.role,
+    operationContext,
   });
+  clearOperationContext(operationContext);
 
   const recipients = resolveCrossPortalTargets({
     member,
