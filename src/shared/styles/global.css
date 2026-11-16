@@ -519,6 +519,193 @@ code,
   background: rgba(17, 22, 34, 0.5);
 }
 
+/* Phase 03 Calendar Grid (Desktop) & Dedicated Mobile Agenda */
+.calendar-desktop-view {
+  display: block;
+}
+
+.calendar-mobile-view {
+  display: none;
+}
+
+.calendar-grid-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: rgba(13, 18, 28, 0.86);
+}
+
+.calendar-grid-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.calendar-grid-table th,
+.calendar-grid-table td {
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.calendar-grid-table th:last-child,
+.calendar-grid-table td:last-child {
+  border-right: 0;
+}
+
+.calendar-grid-time-col {
+  width: 76px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: rgba(17, 22, 34, 0.96);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  padding-right: 10px;
+  white-space: nowrap;
+}
+
+.calendar-col-header {
+  background: rgba(23, 30, 46, 0.9);
+  text-align: left;
+  font-size: 12px;
+  padding: 10px 8px;
+}
+
+.calendar-col-header.today {
+  background: rgba(245, 184, 100, 0.14);
+  color: var(--accent-brass);
+}
+
+.calendar-cell {
+  min-height: 44px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.calendar-cell-free {
+  cursor: pointer;
+}
+
+.calendar-cell-free:hover {
+  background: rgba(245, 184, 100, 0.08);
+}
+
+.booking-chip {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: rgba(31, 40, 61, 0.9);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.booking-chip:hover {
+  border-color: var(--accent-brass);
+  background: rgba(39, 51, 77, 0.95);
+}
+
+.booking-chip.status-CONFIRMED {
+  border-left: 3px solid var(--accent-sky);
+}
+
+.booking-chip.status-PENDING_CONFIRMATION {
+  border-left: 3px solid var(--status-warning);
+}
+
+.booking-chip.status-IN_PROGRESS {
+  border-left: 3px solid var(--status-success);
+}
+
+.booking-chip.status-COMPLETED_PENDING_SETTLEMENT,
+.booking-chip.status-SETTLED {
+  border-left: 3px solid var(--accent-brass);
+}
+
+.booking-chip.status-CANCELLED,
+.booking-chip.status-NO_SHOW {
+  border-left: 3px solid var(--status-danger);
+  opacity: 0.72;
+}
+
+.mobile-date-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-date-pill {
+  flex: 0 0 auto;
+  min-width: 78px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.mobile-date-pill.active {
+  border-color: rgba(245, 184, 100, 0.55);
+  background: var(--accent-brass-soft);
+  color: var(--accent-brass);
+}
+
+.slot-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.slot-chip {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.slot-chip.free:hover {
+  border-color: var(--accent-brass);
+  color: var(--accent-brass);
+}
+
+.slot-chip.occupied {
+  background: rgba(255, 140, 140, 0.08);
+  border-color: rgba(255, 140, 140, 0.25);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+@media (max-width: 768px) {
+  .calendar-desktop-view {
+    display: none;
+  }
+
+  .calendar-mobile-view {
+    display: grid;
+    gap: 14px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -22,6 +22,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/members/$(uid);
     }
 
+    function studioPath(businessId, studioId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/studios/$(studioId);
+    }
+
+    function settingPath(businessId, settingId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/settings/$(settingId);
+    }
+
     function hasActiveMembership(businessId) {
       return isSignedIn()
         && exists(memberPath(businessId, request.auth.uid))
@@ -43,6 +51,15 @@ service cloud.firestore {
         || (
           hasActiveMembership(businessId)
           && currentMember(businessId).get(['permissions', 'canManageCustomers'], false) == true
+        );
+    }
+
+    function canOperateStudioBooking(businessId, studioId) {
+      return isOwner(businessId)
+        || (
+          hasActiveMembership(businessId)
+          && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+          && studioId in currentMember(businessId).assignedStudioIds
         );
     }
 
@@ -390,6 +407,108 @@ service cloud.firestore {
         && data.schemaVersion >= 1;
     }
 
+    function isValidBookingData(data, businessId, bookingId) {
+      return data.keys().hasOnly([
+          'bookingId', 'businessId', 'studioId', 'serviceId', 'customerId', 'operatorUid',
+          'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes', 'bufferMinutes',
+          'startAt', 'endAt', 'slotIds', 'status',
+          'studioSnapshot', 'serviceSnapshot', 'customerSnapshot',
+          'priceSnapshot', 'commissionSnapshot',
+          'notes', 'cancelReason', 'cancelledBy', 'cancelledAt',
+          'checkedInAt', 'completedAt', 'rescheduleCount',
+          'schemaVersion', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'
+        ])
+        && data.bookingId == bookingId
+        && data.businessId == businessId
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.serviceId is string && data.serviceId.size() >= 1
+        && data.customerId is string && data.customerId.size() >= 1
+        && isValidNullableString(data, 'operatorUid', 128)
+        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.timezone is string && data.timezone.size() >= 2
+        && data.startTime is string && data.startTime.size() == 5
+        && data.endTime is string && data.endTime.size() == 5
+        && data.durationMinutes is int && data.durationMinutes >= 15 && data.durationMinutes <= 1440
+        && data.bufferMinutes is int && data.bufferMinutes >= 0 && data.bufferMinutes <= 120
+        && data.startAt is timestamp
+        && data.endAt is timestamp
+        && data.endAt > data.startAt
+        && data.slotIds is list && data.slotIds.size() >= 1 && data.slotIds.size() <= 96
+        && data.status in [
+          'PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS',
+          'COMPLETED_PENDING_SETTLEMENT', 'CANCELLED', 'NO_SHOW'
+        ]
+        && data.studioSnapshot is map
+        && data.serviceSnapshot is map
+        && data.customerSnapshot is map
+        && data.priceSnapshot is map
+        && data.priceSnapshot.currency == 'IDR'
+        && data.priceSnapshot.totalMinor is int && data.priceSnapshot.totalMinor >= 0
+        && data.priceSnapshot.discountMinor is int && data.priceSnapshot.discountMinor >= 0
+        && data.commissionSnapshot is map
+        && data.commissionSnapshot.currency == 'IDR'
+        && data.commissionSnapshot.amountMinor is int && data.commissionSnapshot.amountMinor >= 0
+        && isValidNullableString(data, 'notes', 500)
+        && isValidNullableString(data, 'cancelReason', 300)
+        && isValidNullableString(data, 'cancelledBy', 128)
+        && data.rescheduleCount is int && data.rescheduleCount >= 0
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidBookingSlotData(data, businessId, slotId) {
+      return data.keys().hasOnly([
+          'slotId', 'businessId', 'studioId', 'dateKey', 'bucketIndex', 'slotTime',
+          'kind', 'status', 'bookingId', 'slotStartAt', 'slotEndAt',
+          'reservedBy', 'reservedAt', 'releasedAt', 'schemaVersion', 'updatedAt', 'updatedBy'
+        ])
+        && data.slotId == slotId
+        && data.businessId == businessId
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.bucketIndex is int && data.bucketIndex >= 0 && data.bucketIndex <= 95
+        && (
+          (data.bucketIndex < 10 && slotId == data.studioId + '__' + data.dateKey + '__0' + string(data.bucketIndex))
+          || (data.bucketIndex >= 10 && slotId == data.studioId + '__' + data.dateKey + '__' + string(data.bucketIndex))
+        )
+        && data.slotTime is string && data.slotTime.matches('^([01][0-9]|2[0-3]):(00|15|30|45)$')
+        && data.kind in ['session', 'buffer']
+        && data.status in ['active', 'released']
+        && (
+          (data.status == 'active' && data.bookingId is string && data.bookingId.size() >= 1)
+          || (data.status == 'released' && data.bookingId == null)
+        )
+        && data.slotStartAt is timestamp
+        && data.slotEndAt is timestamp
+        && data.slotEndAt > data.slotStartAt
+        && data.reservedBy is string && data.reservedBy.size() >= 1
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidActivityLogData(data, businessId, eventId) {
+      return data.keys().hasOnly([
+          'eventId', 'businessId', 'studioId', 'eventType', 'entityType', 'entityId',
+          'operationId', 'actorUid', 'actorRole', 'beforeStatus', 'afterStatus',
+          'reason', 'summary', 'schemaVersion', 'createdAt'
+        ])
+        && data.eventId == eventId
+        && data.businessId == businessId
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.entityType == 'booking'
+        && data.entityId is string && data.entityId.size() >= 1
+        && data.operationId is string && data.operationId.size() >= 1
+        && data.eventType in [
+          'booking.created', 'booking.confirmed', 'booking.started',
+          'booking.completed', 'booking.cancelled', 'booking.no_show', 'booking.rescheduled'
+        ]
+        && data.actorUid == request.auth.uid
+        && data.actorRole == currentMember(businessId).role
+        && isValidNullableString(data, 'beforeStatus', 60)
+        && data.afterStatus is string && data.afterStatus.size() >= 1
+        && isValidNullableString(data, 'reason', 300)
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
     // -------------------------------------------------------------------------
     // Global user profile (must NEVER contain role/permission/business access)
     // -------------------------------------------------------------------------
@@ -624,15 +743,155 @@ service cloud.firestore {
       }
 
       // -----------------------------------------------------------------------
-      // Phase 03+ Subcollections remain explicitly denied by default until
+      // Phase 03: Booking Engine, Atomic Slot Locks & Append-Only Activity Logs
+      // -----------------------------------------------------------------------
+      match /bookings/{bookingId} {
+        allow get, list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && resource != null
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && isValidBookingData(request.resource.data, businessId, bookingId)
+          && request.resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+          && request.resource.data.rescheduleCount == 0
+          && exists(studioPath(businessId, request.resource.data.studioId))
+          && get(studioPath(businessId, request.resource.data.studioId)).data.status == 'active'
+          && (
+            request.resource.data.priceSnapshot.discountMinor == 0
+            || isOwner(businessId)
+            || (
+              currentMember(businessId).get(['permissions', 'canApplyDiscount'], false) == true
+              && exists(settingPath(businessId, 'pricing'))
+              && get(settingPath(businessId, 'pricing')).data.allowOperatorDiscount == true
+            )
+          )
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
+          && isValidBookingData(request.resource.data, businessId, bookingId)
+          && request.resource.data.bookingId == resource.data.bookingId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.studioId == resource.data.studioId
+          && request.resource.data.serviceId == resource.data.serviceId
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            // Valid atomic reschedule without lifecycle jump
+            (
+              resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+              && request.resource.data.status == resource.data.status
+              && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+              && (
+                request.resource.data.durationMinutes != resource.data.durationMinutes
+                || (
+                  request.resource.data.priceSnapshot == resource.data.priceSnapshot
+                  && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
+                )
+              )
+            )
+            // Valid lifecycle status transition keeping historical pricing snapshots untouched
+            || (
+              request.resource.data.rescheduleCount == resource.data.rescheduleCount
+              && request.resource.data.slotIds == resource.data.slotIds
+              && request.resource.data.startAt == resource.data.startAt
+              && request.resource.data.endAt == resource.data.endAt
+              && request.resource.data.priceSnapshot == resource.data.priceSnapshot
+              && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
+              && (
+                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
+                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
+                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+              )
+            )
+          );
+
+        allow delete: if false;
+      }
+
+      match /bookingSlots/{slotId} {
+        allow get: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && (
+              (resource != null && resource.data.studioId in currentMember(businessId).assignedStudioIds)
+              || (
+                resource == null
+                && slotId.split('__').size() == 3
+                && slotId.split('__')[0] in currentMember(businessId).assignedStudioIds
+              )
+            )
+          );
+
+        allow list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && isValidBookingSlotData(request.resource.data, businessId, slotId)
+          && request.resource.data.status == 'active'
+          && request.resource.data.reservedBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.reservedAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
+          && isValidBookingSlotData(request.resource.data, businessId, slotId)
+          && request.resource.data.slotId == resource.data.slotId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.studioId == resource.data.studioId
+          && request.resource.data.dateKey == resource.data.dateKey
+          && request.resource.data.bucketIndex == resource.data.bucketIndex
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            (resource.data.status == 'released' && request.resource.data.status == 'active')
+            || (resource.data.status == 'active' && request.resource.data.status == 'released')
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && request.resource.data.bookingId == resource.data.bookingId
+            )
+          );
+
+        allow delete: if false;
+      }
+
+      match /activityLogs/{eventId} {
+        allow get, list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && resource != null
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && isValidActivityLogData(request.resource.data, businessId, eventId)
+          && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 04+ Subcollections remain explicitly denied by default until
       // their schema, invariants, and phase tests are implemented.
       // -----------------------------------------------------------------------
-      match /bookings/{bookingId} { allow read, write: if false; }
-      match /bookingSlots/{slotId} { allow read, write: if false; }
       match /ledgerEntries/{entryId} { allow read, write: if false; }
       match /commissionEntries/{entryId} { allow read, write: if false; }
       match /galleryAssets/{assetId} { allow read, write: if false; }
-      match /activityLogs/{eventId} { allow read, write: if false; }
       match /notifications/{notificationId} { allow read, write: if false; }
     }
 

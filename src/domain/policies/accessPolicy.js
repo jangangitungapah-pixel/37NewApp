@@ -142,3 +142,39 @@ export function filterAccessibleStudios(member, studios) {
   }
   return studios.filter((studio) => canAccessStudio(member, studio?.studioId || ''));
 }
+
+/**
+ * Evaluates whether a member can manage bookings operationally.
+ * @param {{ role?: string, status?: string, permissions?: Record<string, boolean> } | null | undefined} member
+ * @returns {boolean}
+ */
+export function canManageBookings(member) {
+  return isOwnerMember(member) || hasMemberPermission(member, 'canManageBookings');
+}
+
+/**
+ * Evaluates whether a member can read/create/mutate bookings in a given studio.
+ * @param {{ role?: string, status?: string, assignedStudioIds?: string[], permissions?: Record<string, boolean> } | null | undefined} member
+ * @param {string} studioId
+ * @returns {boolean}
+ */
+export function canOperateStudioBooking(member, studioId) {
+  return canManageBookings(member) && canAccessStudio(member, studioId);
+}
+
+/**
+ * Evaluates whether a member may enter a booking discount under business pricing policy.
+ * @param {{ role?: string, status?: string, permissions?: Record<string, boolean> } | null | undefined} member
+ * @param {{ allowOperatorDiscount?: boolean } | null | undefined} pricingSetting
+ * @returns {boolean}
+ */
+export function canApplyBookingDiscount(member, pricingSetting) {
+  if (isOwnerMember(member)) {
+    return true;
+  }
+  return (
+    isActiveMember(member) &&
+    Boolean(pricingSetting?.allowOperatorDiscount) &&
+    hasMemberPermission(member, 'canApplyDiscount')
+  );
+}

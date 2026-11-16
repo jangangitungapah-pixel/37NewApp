@@ -70,6 +70,52 @@ export const BOOKING_INITIAL_STATUS_POLICY = Object.freeze({
 
 export const SLOT_GRANULARITY_OPTIONS = Object.freeze([15, 30, 60]);
 
+export const BASE_SLOT_BUCKET_MINUTES = 15;
+
+export const BOOKING_STATUS = Object.freeze({
+  PENDING_CONFIRMATION: 'PENDING_CONFIRMATION',
+  CONFIRMED: 'CONFIRMED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED_PENDING_SETTLEMENT: 'COMPLETED_PENDING_SETTLEMENT',
+  SETTLEMENT_REVIEW: 'SETTLEMENT_REVIEW',
+  SETTLED: 'SETTLED',
+  CANCELLED: 'CANCELLED',
+  NO_SHOW: 'NO_SHOW',
+});
+
+export const BLOCKING_BOOKING_STATUSES = Object.freeze([
+  BOOKING_STATUS.PENDING_CONFIRMATION,
+  BOOKING_STATUS.CONFIRMED,
+  BOOKING_STATUS.IN_PROGRESS,
+  BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT,
+  BOOKING_STATUS.SETTLEMENT_REVIEW,
+  BOOKING_STATUS.SETTLED,
+]);
+
+export const BOOKING_SLOT_STATUS = Object.freeze({
+  ACTIVE: 'active',
+  RELEASED: 'released',
+});
+
+export const BOOKING_SLOT_KIND = Object.freeze({
+  SESSION: 'session',
+  BUFFER: 'buffer',
+});
+
+export const ACTIVITY_EVENT_TYPE = Object.freeze({
+  BOOKING_CREATED: 'booking.created',
+  BOOKING_CONFIRMED: 'booking.confirmed',
+  BOOKING_STARTED: 'booking.started',
+  BOOKING_COMPLETED: 'booking.completed',
+  BOOKING_CANCELLED: 'booking.cancelled',
+  BOOKING_NO_SHOW: 'booking.no_show',
+  BOOKING_RESCHEDULED: 'booking.rescheduled',
+});
+
+export const ACTIVITY_ENTITY_TYPE = Object.freeze({
+  BOOKING: 'booking',
+});
+
 export const SCHEMA_VERSIONS = Object.freeze({
   USER_PROFILE: 1,
   BUSINESS: 1,
@@ -79,6 +125,9 @@ export const SCHEMA_VERSIONS = Object.freeze({
   STUDIO: 1,
   SERVICE: 1,
   CUSTOMER: 1,
+  BOOKING: 1,
+  BOOKING_SLOT: 1,
+  ACTIVITY_LOG: 1,
 });
 
 export const OPERATOR_DEFAULT_PERMISSIONS = Object.freeze({

@@ -559,18 +559,15 @@ describe('Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants)'
       }),
     );
 
-    // Phase 03+ collections MUST stay locked `if false` even for active Owner
-    const phase03PlusCollections = [
-      ['bookings', 'bk-1'],
-      ['bookingSlots', 'slot-1'],
+    // Phase 04+ collections MUST stay locked `if false` even for active Owner
+    const phase04PlusCollections = [
       ['ledgerEntries', 'led-1'],
       ['commissionEntries', 'comm-1'],
       ['galleryAssets', 'gal-1'],
-      ['activityLogs', 'log-1'],
       ['notifications', 'notif-1'],
     ];
 
-    for (const [colName, docId] of phase03PlusCollections) {
+    for (const [colName, docId] of phase04PlusCollections) {
       await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, colName, docId)));
       await assertFails(
         setDoc(doc(ownerDb, 'businesses', BIZ_ID, colName, docId), {

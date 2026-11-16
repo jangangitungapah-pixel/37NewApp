@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ROLES } from '../../../domain/enums/roles.js';
+import { BookingCalendarPage } from '../../../features/bookings/BookingCalendarPage.jsx';
 import { CustomersPage } from '../../../features/customers/CustomersPage.jsx';
 import { PhaseFoundationDashboard } from '../../../features/dashboard/PhaseFoundationDashboard.jsx';
 import { SessionSecurityProfilePage } from '../../../features/dashboard/SessionSecurityProfilePage.jsx';
@@ -12,6 +13,7 @@ export function OperatorRoutes() {
     <Routes>
       <Route element={<OperatorLayout />}>
         <Route index element={<PhaseFoundationDashboard portalRole={ROLES.OPERATOR} />} />
+        <Route path="bookings" element={<BookingCalendarPage />} />
         <Route path="studios" element={<StudiosPage />} />
         <Route path="services" element={<ServicesPricingPage />} />
         <Route path="customers" element={<CustomersPage />} />

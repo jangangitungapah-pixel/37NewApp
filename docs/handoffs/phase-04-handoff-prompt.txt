@@ -1,0 +1,55 @@
+CONTEXT HANDOFF — 37MusicStudio Rebuild
+Target Phase: Phase 04 — Session, Settlement, Ledger & Commission
+Repository: c:\Users\hazel\source\repos\37NewApp (branch: main)
+Baseline Prerequisites:
+- Read README.md, docs/checkpoints/phase-01-checkpoint.md, docs/checkpoints/phase-02-checkpoint.md, docs/checkpoints/phase-03-checkpoint.md, and Section 08 ("Finance & Commission"), Section 10 ("Firestore Data Model"), and Section 15 ("Finance & commission") of C:\Users\hazel\Downloads\37MusicStudio_Master_Architecture_Prompt.html BEFORE editing code.
+- Firebase Target Project: musicstudio37app (Database ID: "(default)", Edition: STANDARD, Spark plan only — no Cloud Functions, no Blaze, no external backend). NEVER touch the 5 existing Firebase projects on the account and NEVER run `firebase deploy` unless explicitly requested by the user.
+
+WHAT WAS COMPLETED IN PHASE 03 (AVAILABLE NOW):
+1. Booking Engine Domain & Slot Locking:
+   - `src/domain/enums/roles.js`: `BOOKING_STATUS` (`PENDING_CONFIRMATION`, `CONFIRMED`, `IN_PROGRESS`, `COMPLETED_PENDING_SETTLEMENT`, `SETTLEMENT_REVIEW`, `SETTLED`, `CANCELLED`, `NO_SHOW`), `ACTIVITY_EVENT_TYPE`, `BASE_SLOT_BUCKET_MINUTES` (15), `SCHEMA_VERSIONS`.
+   - `src/domain/calculations/slotGenerator.js`: timezone-safe IANA date/time conversion (`Asia/Jakarta`), deterministic 15-min slot bucket IDs (`${studioId}__${dateKey}__${bucketIndexPadded}`), buffer slot planning.
+   - `src/domain/validators/bookingValidator.js`: `PHASE03_BOOKING_TRANSITIONS`, `validateBookingDoc`, `validateBookingSlotDoc`, `validateActivityLogDoc`.
+   - `src/domain/calculations/commissionCalculator.js` & `pricingCalculator.js`: frozen `priceSnapshot` and `commissionSnapshot` are already saved cleanly on every booking document at creation (and adjusted cleanly if rescheduled with duration change).
+2. Booking Repository, Use Cases & Calendar UI:
+   - `src/data/repositories/bookingRepository.js`: atomic `createBookingTransaction`, `transitionBookingStatusTransaction`, `rescheduleBookingTransaction`, plus role/studio-scoped `subscribeBookingsInRange`, `subscribeActiveSlotsForStudioDay`, `subscribeBookingActivityLogs`.
+   - `src/application/use-cases/bookingUseCases.js`: online guard, role/studio checks, mandatory cancel/no-show reason, same-day reschedule guard for Operators.
+   - `src/features/bookings/BookingCalendarPage.jsx`, `CreateBookingModal.jsx`, `BookingDetailModal.jsx` wired to `/owner/bookings` and `/operator/bookings`.
+3. Security Rules & Indexes (`firestore.rules` & `firestore.indexes.json`):
+   - `bookings`, `bookingSlots`, `activityLogs` are open and verified in Standard Edition Emulator (`tests/rules/phase03.rules.test.js`).
+   - `SETTLEMENT_REVIEW` and `SETTLED` transitions on `bookings` are currently locked in Rules.
+   - `ledgerEntries`, `commissionEntries`, `galleryAssets`, `notifications` remain strictly locked `allow read, write: if false;`.
+
+REQUIRED DELIVERABLES FOR PHASE 04 (SESSION, SETTLEMENT, LEDGER & COMMISSION):
+1. Settlement Lifecycle & Deterministic Financial Entry IDs (`src/domain/`):
+   - Unlock `COMPLETED_PENDING_SETTLEMENT -> SETTLED`, `COMPLETED_PENDING_SETTLEMENT -> SETTLEMENT_REVIEW`, `SETTLEMENT_REVIEW -> SETTLED` transitions cleanly.
+   - Add payment method enum (e.g. `cash`, `transfer`, `qris`, `card`, `other`), ledger entry types (`PAYMENT_RECEIVED`, `REFUND`, `ADJUSTMENT`, `REVERSAL`), commission entry statuses (`RECORDED`, `VOIDED`, `ADJUSTED`), and schema versions (`LEDGER_ENTRY: 1`, `COMMISSION_ENTRY: 1`, `SETTLEMENT_RECORD` metadata on booking).
+   - Use deterministic IDs so client retries NEVER duplicate ledger/commission records:
+     - Primary payment ledger entry ID: e.g. `settlement_payment__${bookingId}`
+     - Primary commission entry ID: e.g. `commission_earned__${bookingId}__${operatorUid}` (or `commission__${bookingId}`)
+     - Adjustments/reversals reference `parentEntryId` / `relatedEntryId` cleanly with unique sequence/adjustment ID.
+   - Strictly integer IDR minor amounts (`totalMinor`, `paidAmountMinor`, `amountMinor`) — never float currency math.
+2. Atomic Owner Settlement & Reversal/Adjustment Transactions (`src/data/repositories/financeRepository.js`):
+   - `settleBookingTransaction` inside a single `runTransaction`:
+     - Verify booking is `COMPLETED_PENDING_SETTLEMENT` or `SETTLEMENT_REVIEW`, read existing deterministic `ledgerEntries/{paymentId}` and `commissionEntries/{commId}` to guarantee idempotency (abort/return cleanly if already recorded without duplicating!).
+     - Update `bookings/{bookingId}` -> `status: 'SETTLED'`, save settlement metadata (`settledAt`, `settledBy`, `paymentMethod`, `paidAmountMinor`, `settlementReference`, `settlementNotes`).
+     - Create immutable `ledgerEntries/{paymentId}` (`type: 'PAYMENT_RECEIVED'`, `bookingId`, `studioId`, `amountMinor`, `currency: 'IDR'`, `paymentMethod`, `createdBy`, `createdAt`).
+     - If commission > 0 (or zero-recorded per policy), create immutable `commissionEntries/{commId}` referencing `bookingId`, `studioId`, `operatorUid`, `amountMinor`, `method`, `rateOrValue`, `basis`, `basisAmountMinor`, `source`, `status: 'RECORDED'`, `createdBy`, `createdAt`.
+     - Append immutable `activityLogs` entry (`booking.settled` / `settlement.review_requested`).
+   - Implement correction/reversal flow (`createLedgerAdjustmentUseCase` / `adjustCommissionEntryUseCase`): NEVER edit or delete existing `ledgerEntries` or `commissionEntries`; create new `ADJUSTMENT` / `REVERSAL` ledger/commission entries referencing `originalEntryId` + mandatory reason + Owner-only authorization!
+3. Firestore Security Rules & Composite Indexes (`firestore.rules`, `firestore.indexes.json`):
+   - Unlock `ledgerEntries/{entryId}` and `commissionEntries/{entryId}`:
+     - **Immutability**: `allow update, delete: if false;` on BOTH collections! Corrections must be new adjustment/reversal docs.
+     - **Owner-only writes** by default (`isOwner(businessId)` or explicit `permissions.canSettleBookings == true` ONLY if business explicitly supports it — document residual client-math trade-off under Spark cleanly, and default settlement/adjustment strictly to Owner!).
+     - **Scoped reads**: Owner reads all `ledgerEntries` & `commissionEntries` (cursor/date-ranged); Operator CANNOT read general business `ledgerEntries` revenue reports unless explicitly permitted, and on `commissionEntries` Operator can ONLY read `where('operatorUid', '==', request.auth.uid)` (`resource.data.operatorUid == request.auth.uid`)!
+   - Update `bookings/{bookingId}` update rules to permit `COMPLETED_PENDING_SETTLEMENT -> SETTLEMENT_REVIEW` and `-> SETTLED` strictly via Owner (or authorized settler) and add `booking.settled`, `booking.settlement_review`, `ledger.adjusted`, `commission.adjusted` to `activityLogs` allowed `eventType`s.
+   - Keep `galleryAssets` & `notifications` locked `if false` until Phase 05 / Phase 06.
+4. Owner Settlement Queue, Financial Ledger & Operator Commission Portal Views:
+   - Owner `/owner/settlements` (or `/owner/finance` — Settlement Queue showing `COMPLETED_PENDING_SETTLEMENT` & `SETTLEMENT_REVIEW` bookings, Owner settlement review modal, payment verification, immutable Ledger table with date/studio filter & Adjustment/Reversal flow, Financial KPI summary separating Revenue vs Payment Received vs Outstanding/Unsettled vs Refunds vs Operator Commission).
+   - Operator `/operator/commissions` (`Komisi Saya` — strictly scoped to `operatorUid == auth.uid` date-ranged query showing earned/adjusted commissions without exposing full studio revenue ledger).
+   - Quick link / button from Booking Detail Drawer when `status === 'COMPLETED_PENDING_SETTLEMENT'` for Owner to settle directly!
+5. Verification & Gate Before Stopping at End of Phase 04:
+   - Unit tests: idempotent ledger/commission deterministic IDs, settlement math, adjustment/reversal net balance calculations, distinct financial metric definitions, offline blocking.
+   - Firestore Emulator Rules tests (`npm run test:rules`): settlement role enforcement (Operator blocked from settling / reading full business ledger; Operator sees ONLY own `commissionEntries`), `allow update, delete: if false` on ledger & commission entries, retry/duplicate `create` blocked by Rules on deterministic IDs, `galleryAssets` & `notifications` still locked.
+   - `npm run lint`, `npm run test:unit`, `npm run test:rules`, `npm run build` all pass cleanly.
+   - Timestamped verification `.txt` log saved in `logs/`, git commit on `main`, `README.md` updated, `docs/checkpoints/phase-04-checkpoint.md` and `docs/handoffs/phase-05-handoff-prompt.txt` written, then STOP before Phase 05.
