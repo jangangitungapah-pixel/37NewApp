@@ -10,6 +10,7 @@ import {
   resolveSessionStatus,
 } from '../../src/domain/validators/bookingSessionValidator.js';
 import { deriveSessionStatusFromBookingStatus } from '../../src/domain/validators/bookingValidator.js';
+import { validateBookingSessionEventDoc } from '../../src/domain/validators/bookingSessionValidator.js';
 
 const schedule = new Date('2026-11-20T07:00:00.000Z');
 const baseBooking = {
@@ -125,3 +126,53 @@ describe('Phase 10 booking/session lifecycle contracts', () => {
     }).nextSessionStatus).toBe(SESSION_STATUS.CANCELLED);
   });
 });
+
+describe('Phase 10 append-only session event contract', () => {
+  const validEvent = {
+    eventId: 'booking_session__operation-1',
+    businessId: 'business-1',
+    bookingId: 'booking-1',
+    studioId: 'studio-1',
+    action: SESSION_ACTION.CHECK_IN,
+    fromStatus: SESSION_STATUS.UPCOMING,
+    toStatus: SESSION_STATUS.UPCOMING,
+    actorUid: 'owner-1',
+    actorRole: 'owner',
+    actorName: 'Studio Owner',
+    reason: null,
+    operationId: 'booking_session__operation-1',
+    requestId: 'request-1',
+    payloadHash: 'a'.repeat(64),
+    schemaVersion: 1,
+    createdAt: new Date('2026-11-20T07:00:00.000Z'),
+  };
+
+  it('accepts a valid immutable session event contract', () => {
+    expect(validateBookingSessionEventDoc(validEvent)).toMatchObject({
+      eventId: validEvent.eventId,
+      action: SESSION_ACTION.CHECK_IN,
+      fromStatus: SESSION_STATUS.UPCOMING,
+      toStatus: SESSION_STATUS.UPCOMING,
+      actorUid: 'owner-1',
+      payloadHash: 'a'.repeat(64),
+    });
+  });
+
+  it.each([
+    ['unknown action', { action: 'override' }],
+    ['invalid source status', { fromStatus: 'SETTLED' }],
+    ['invalid actor role', { actorRole: 'customer' }],
+    ['malformed payload hash', { payloadHash: 'not-a-hash' }],
+    ['missing operation ID', { operationId: '' }],
+  ])('rejects an event with %s', (_label, patch) => {
+    expect(() => validateBookingSessionEventDoc({ ...validEvent, ...patch })).toThrow();
+  });
+
+  it('rejects an event reason longer than the bounded audit field', () => {
+    expect(() => validateBookingSessionEventDoc({
+      ...validEvent,
+      reason: 'x'.repeat(301),
+    })).toThrow(/300 karakter/);
+  });
+});
+
