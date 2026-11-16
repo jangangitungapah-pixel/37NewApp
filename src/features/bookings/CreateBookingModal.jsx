@@ -37,8 +37,8 @@ import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscript
 import { formatIdr, formatOperatingHours } from '../../shared/utils/formatters.js';
 
 const bookingCreateSchema = z.object({
-  dateKey: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/, 'Tanggal booking wajib valid.'),
-  startTime: z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/, 'Jam mulai wajib valid.'),
+  dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal booking wajib valid.'),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Jam mulai wajib valid.'),
   durationMinutes: z.coerce.number().int().min(15, 'Durasi minimal 15 menit.').max(720, 'Durasi maksimal 12 jam.'),
   customerId: z.string().min(1, 'Customer wajib dipilih.'),
   discountMinor: z.coerce.number().int().min(0, 'Diskon tidak boleh negatif.'),
