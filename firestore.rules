@@ -1128,115 +1128,92 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
-          && (
-            !('lastOperationId' in request.resource.data)
-            || hasMatchingBookingOperationAfter(
-              businessId,
-              bookingId,
-              request.resource.data.studioId,
-              request.resource.data,
-              'booking.create'
-            )
-          );
+          && request.resource.data.lastOperationType == 'booking.create'
+          && hasMatchingBookingOperationAfter(
+            businessId, bookingId, request.resource.data.studioId,
+            request.resource.data, 'booking.create'
+          )
+          && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'create';
 
         allow update: if isValidBookingSessionUpdate(
             businessId, bookingId, resource.data, request.resource.data
           )
           || (
-            request.resource.data.updatedBy == request.auth.uid
+            // Request decision: confirm only. Rejection/cancellation are session actions.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status == 'PENDING_CONFIRMATION'
+            && request.resource.data.status == 'CONFIRMED'
+            && request.resource.data.sessionStatus == 'UPCOMING'
+            && request.resource.data.lastOperationType == 'booking.decision'
+            && request.resource.data.updatedBy == request.auth.uid
             && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'lastOperationId',
+              'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.decision'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'decision:CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultBookingStatus == 'CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultSessionStatus == 'UPCOMING'
+          )
+          || (
+            // Atomic reschedule: marker and all slot changes share one transaction.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+            && request.resource.data.lastOperationType == 'booking.reschedule'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+              'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+              'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.reschedule'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'reschedule'
+            && request.resource.data.endAt > request.resource.data.startAt
+            && request.resource.data.slotIds is list
+            && request.resource.data.slotIds.size() >= 1
+            && request.resource.data.slotIds.size() <= 96
             && (
-            // 1. Legacy operational lifecycle transition (kept only for pre-session records)
-            (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'cancelReason', 'cancelledBy', 'cancelledAt',
-                'checkedInAt', 'completedAt', 'sessionStatus', 'updatedBy', 'updatedAt',
-                'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
-              ])
-              && (
-                !('lastOperationId' in request.resource.data)
-                || hasMatchingBookingOperationAfter(
-                  businessId, bookingId, resource.data.studioId,
-                  request.resource.data, 'booking.decision'
-                )
-              )
-              && (
-                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
-                || (
-                  resource.data.status == 'CONFIRMED'
-                  && !('sessionStatus' in resource.data)
-                  && request.resource.data.status == 'IN_PROGRESS'
-                )
-                || (
-                  resource.data.status == 'CONFIRMED'
-                  && request.resource.data.status == 'CANCELLED'
-                )
-                || (
-                  resource.data.status == 'CONFIRMED'
-                  && request.resource.data.status == 'NO_SHOW'
-                  && resource.data.get('checkedInAt', null) == null
-                  && request.resource.data.cancelReason is string
-                  && request.resource.data.cancelReason.size() >= 3
-                  && request.time >= resource.data.startAt + duration.value(15, 'm')
-                )
-                || (
-                  resource.data.status == 'IN_PROGRESS'
-                  && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED']
-                )
+              request.resource.data.durationMinutes != resource.data.durationMinutes
+              || (
+                request.resource.data.priceSnapshot == resource.data.priceSnapshot
+                && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
               )
             )
-            // 2. Atomic reschedule (preserving lifecycle status & increments rescheduleCount)
-            || (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-              && request.resource.data.status == resource.data.status
-              && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
-                'bufferMinutes', 'startAt', 'endAt', 'slotIds',
-                'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
-                'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
-              ])
-              && (
-                !('lastOperationId' in request.resource.data)
-                || hasMatchingBookingOperationAfter(
-                  businessId, bookingId, resource.data.studioId,
-                  request.resource.data, 'booking.reschedule'
-                )
+          )
+          || (
+            // Owner-only Finance handoff remains unchanged.
+            isOwner(businessId)
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'settlement', 'updatedBy', 'updatedAt'
+            ])
+            && (
+              (
+                resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
+                && request.resource.data.status == 'SETTLEMENT_REVIEW'
               )
-              && request.resource.data.endAt > request.resource.data.startAt
-              && request.resource.data.slotIds is list && request.resource.data.slotIds.size() >= 1 && request.resource.data.slotIds.size() <= 96
-              && (
-                request.resource.data.durationMinutes != resource.data.durationMinutes
-                || (
-                  request.resource.data.priceSnapshot == resource.data.priceSnapshot
-                  && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
-                )
-              )
-            )
-            // 3. Owner-only settlement review & atomic final settlement (ledger + commission required in tx)
-            || (
-              isOwner(businessId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'settlement', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (
-                  resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
-                  && request.resource.data.status == 'SETTLEMENT_REVIEW'
-                )
-                || (
-                  resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
-                  && request.resource.data.status == 'SETTLED'
-                  && request.resource.data.settlement is map
-                  && request.resource.data.settlement.paidAmountMinor is int
-                  && request.resource.data.settlement.paidAmountMinor >= 0
-                  && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
-                  && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
-                  && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
-                  && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
-                )
+              || (
+                resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+                && request.resource.data.status == 'SETTLED'
+                && request.resource.data.settlement is map
+                && request.resource.data.settlement.paidAmountMinor is int
+                && request.resource.data.settlement.paidAmountMinor >= 0
+                && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
+                && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
+                && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
+                && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
               )
             )
           );
@@ -1902,8 +1879,10 @@ service cloud.firestore {
           || (
             hasActiveMembership(businessId)
             && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
-            && resource != null
-            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
           );
 
         allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
@@ -1924,67 +1903,93 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
-
-        allow update: if request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
-          && (
-            // 1. Operational lifecycle transition (keeps pricing/slot snapshots untouched)
-            (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'cancelReason', 'cancelledBy', 'cancelledAt',
-                'checkedInAt', 'completedAt', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
-                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
-                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+          && request.resource.data.lastOperationType == 'booking.create'
+          && hasMatchingBookingOperationAfter(
+            businessId, bookingId, request.resource.data.studioId,
+            request.resource.data, 'booking.create'
+          )
+          && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'create';
+
+        allow update: if isValidBookingSessionUpdate(
+            businessId, bookingId, resource.data, request.resource.data
+          )
+          || (
+            // Request decision: confirm only. Rejection/cancellation are session actions.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status == 'PENDING_CONFIRMATION'
+            && request.resource.data.status == 'CONFIRMED'
+            && request.resource.data.sessionStatus == 'UPCOMING'
+            && request.resource.data.lastOperationType == 'booking.decision'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'lastOperationId',
+              'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.decision'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'decision:CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultBookingStatus == 'CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultSessionStatus == 'UPCOMING'
+          )
+          || (
+            // Atomic reschedule: marker and all slot changes share one transaction.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+            && request.resource.data.lastOperationType == 'booking.reschedule'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+              'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+              'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.reschedule'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'reschedule'
+            && request.resource.data.endAt > request.resource.data.startAt
+            && request.resource.data.slotIds is list
+            && request.resource.data.slotIds.size() >= 1
+            && request.resource.data.slotIds.size() <= 96
+            && (
+              request.resource.data.durationMinutes != resource.data.durationMinutes
+              || (
+                request.resource.data.priceSnapshot == resource.data.priceSnapshot
+                && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
               )
             )
-            // 2. Atomic reschedule (preserving lifecycle status & increments rescheduleCount)
-            || (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-              && request.resource.data.status == resource.data.status
-              && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
-                'bufferMinutes', 'startAt', 'endAt', 'slotIds',
-                'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt'
-              ])
-              && request.resource.data.endAt > request.resource.data.startAt
-              && request.resource.data.slotIds is list && request.resource.data.slotIds.size() >= 1 && request.resource.data.slotIds.size() <= 96
-              && (
-                request.resource.data.durationMinutes != resource.data.durationMinutes
-                || (
-                  request.resource.data.priceSnapshot == resource.data.priceSnapshot
-                  && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
-                )
+          )
+          || (
+            // Owner-only Finance handoff remains unchanged.
+            isOwner(businessId)
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'settlement', 'updatedBy', 'updatedAt'
+            ])
+            && (
+              (
+                resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
+                && request.resource.data.status == 'SETTLEMENT_REVIEW'
               )
-            )
-            // 3. Owner-only settlement review & atomic final settlement (ledger + commission required in tx)
-            || (
-              isOwner(businessId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'settlement', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (
-                  resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
-                  && request.resource.data.status == 'SETTLEMENT_REVIEW'
-                )
-                || (
-                  resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
-                  && request.resource.data.status == 'SETTLED'
-                  && request.resource.data.settlement is map
-                  && request.resource.data.settlement.paidAmountMinor is int
-                  && request.resource.data.settlement.paidAmountMinor >= 0
-                  && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
-                  && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
-                  && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
-                  && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
-                )
+              || (
+                resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+                && request.resource.data.status == 'SETTLED'
+                && request.resource.data.settlement is map
+                && request.resource.data.settlement.paidAmountMinor is int
+                && request.resource.data.settlement.paidAmountMinor >= 0
+                && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
+                && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
+                && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
+                && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
               )
             )
           );
@@ -2884,8 +2889,10 @@ service cloud.firestore {
           || (
             hasActiveMembership(businessId)
             && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
-            && resource != null
-            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
           );
 
         allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
@@ -2906,67 +2913,93 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
-
-        allow update: if request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
-          && (
-            // 1. Operational lifecycle transition (keeps pricing/slot snapshots untouched)
-            (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'cancelReason', 'cancelledBy', 'cancelledAt',
-                'checkedInAt', 'completedAt', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
-                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
-                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+          && request.resource.data.lastOperationType == 'booking.create'
+          && hasMatchingBookingOperationAfter(
+            businessId, bookingId, request.resource.data.studioId,
+            request.resource.data, 'booking.create'
+          )
+          && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'create';
+
+        allow update: if isValidBookingSessionUpdate(
+            businessId, bookingId, resource.data, request.resource.data
+          )
+          || (
+            // Request decision: confirm only. Rejection/cancellation are session actions.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status == 'PENDING_CONFIRMATION'
+            && request.resource.data.status == 'CONFIRMED'
+            && request.resource.data.sessionStatus == 'UPCOMING'
+            && request.resource.data.lastOperationType == 'booking.decision'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'lastOperationId',
+              'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.decision'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'decision:CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultBookingStatus == 'CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultSessionStatus == 'UPCOMING'
+          )
+          || (
+            // Atomic reschedule: marker and all slot changes share one transaction.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+            && request.resource.data.lastOperationType == 'booking.reschedule'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+              'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+              'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.reschedule'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'reschedule'
+            && request.resource.data.endAt > request.resource.data.startAt
+            && request.resource.data.slotIds is list
+            && request.resource.data.slotIds.size() >= 1
+            && request.resource.data.slotIds.size() <= 96
+            && (
+              request.resource.data.durationMinutes != resource.data.durationMinutes
+              || (
+                request.resource.data.priceSnapshot == resource.data.priceSnapshot
+                && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
               )
             )
-            // 2. Atomic reschedule (preserving lifecycle status & increments rescheduleCount)
-            || (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-              && request.resource.data.status == resource.data.status
-              && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
-                'bufferMinutes', 'startAt', 'endAt', 'slotIds',
-                'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt'
-              ])
-              && request.resource.data.endAt > request.resource.data.startAt
-              && request.resource.data.slotIds is list && request.resource.data.slotIds.size() >= 1 && request.resource.data.slotIds.size() <= 96
-              && (
-                request.resource.data.durationMinutes != resource.data.durationMinutes
-                || (
-                  request.resource.data.priceSnapshot == resource.data.priceSnapshot
-                  && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
-                )
+          )
+          || (
+            // Owner-only Finance handoff remains unchanged.
+            isOwner(businessId)
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'settlement', 'updatedBy', 'updatedAt'
+            ])
+            && (
+              (
+                resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
+                && request.resource.data.status == 'SETTLEMENT_REVIEW'
               )
-            )
-            // 3. Owner-only settlement review & atomic final settlement (ledger + commission required in tx)
-            || (
-              isOwner(businessId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'settlement', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (
-                  resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
-                  && request.resource.data.status == 'SETTLEMENT_REVIEW'
-                )
-                || (
-                  resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
-                  && request.resource.data.status == 'SETTLED'
-                  && request.resource.data.settlement is map
-                  && request.resource.data.settlement.paidAmountMinor is int
-                  && request.resource.data.settlement.paidAmountMinor >= 0
-                  && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
-                  && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
-                  && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
-                  && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
-                )
+              || (
+                resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+                && request.resource.data.status == 'SETTLED'
+                && request.resource.data.settlement is map
+                && request.resource.data.settlement.paidAmountMinor is int
+                && request.resource.data.settlement.paidAmountMinor >= 0
+                && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
+                && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
+                && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
+                && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
               )
             )
           );
@@ -3822,8 +3855,10 @@ service cloud.firestore {
           || (
             hasActiveMembership(businessId)
             && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
-            && resource != null
-            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
           );
 
         allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
@@ -3844,67 +3879,93 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
-
-        allow update: if request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt == request.time
-          && (
-            // 1. Operational lifecycle transition (keeps pricing/slot snapshots untouched)
-            (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'cancelReason', 'cancelledBy', 'cancelledAt',
-                'checkedInAt', 'completedAt', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (resource.data.status == 'PENDING_CONFIRMATION' && request.resource.data.status in ['CONFIRMED', 'CANCELLED'])
-                || (resource.data.status == 'CONFIRMED' && request.resource.data.status in ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'])
-                || (resource.data.status == 'IN_PROGRESS' && request.resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'CANCELLED'])
+          && request.resource.data.lastOperationType == 'booking.create'
+          && hasMatchingBookingOperationAfter(
+            businessId, bookingId, request.resource.data.studioId,
+            request.resource.data, 'booking.create'
+          )
+          && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'create';
+
+        allow update: if isValidBookingSessionUpdate(
+            businessId, bookingId, resource.data, request.resource.data
+          )
+          || (
+            // Request decision: confirm only. Rejection/cancellation are session actions.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status == 'PENDING_CONFIRMATION'
+            && request.resource.data.status == 'CONFIRMED'
+            && request.resource.data.sessionStatus == 'UPCOMING'
+            && request.resource.data.lastOperationType == 'booking.decision'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'lastOperationId',
+              'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.decision'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'decision:CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultBookingStatus == 'CONFIRMED'
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.resultSessionStatus == 'UPCOMING'
+          )
+          || (
+            // Atomic reschedule: marker and all slot changes share one transaction.
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+            && request.resource.data.lastOperationType == 'booking.reschedule'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+              'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+              'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
+            ])
+            && hasMatchingBookingOperationAfter(
+              businessId, bookingId, resource.data.studioId,
+              request.resource.data, 'booking.reschedule'
+            )
+            && getAfter(bookingOperationPath(businessId, request.resource.data.lastOperationId)).data.action == 'reschedule'
+            && request.resource.data.endAt > request.resource.data.startAt
+            && request.resource.data.slotIds is list
+            && request.resource.data.slotIds.size() >= 1
+            && request.resource.data.slotIds.size() <= 96
+            && (
+              request.resource.data.durationMinutes != resource.data.durationMinutes
+              || (
+                request.resource.data.priceSnapshot == resource.data.priceSnapshot
+                && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
               )
             )
-            // 2. Atomic reschedule (preserving lifecycle status & increments rescheduleCount)
-            || (
-              canOperateStudioBooking(businessId, resource.data.studioId)
-              && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-              && request.resource.data.status == resource.data.status
-              && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
-                'bufferMinutes', 'startAt', 'endAt', 'slotIds',
-                'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt'
-              ])
-              && request.resource.data.endAt > request.resource.data.startAt
-              && request.resource.data.slotIds is list && request.resource.data.slotIds.size() >= 1 && request.resource.data.slotIds.size() <= 96
-              && (
-                request.resource.data.durationMinutes != resource.data.durationMinutes
-                || (
-                  request.resource.data.priceSnapshot == resource.data.priceSnapshot
-                  && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
-                )
+          )
+          || (
+            // Owner-only Finance handoff remains unchanged.
+            isOwner(businessId)
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'settlement', 'updatedBy', 'updatedAt'
+            ])
+            && (
+              (
+                resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
+                && request.resource.data.status == 'SETTLEMENT_REVIEW'
               )
-            )
-            // 3. Owner-only settlement review & atomic final settlement (ledger + commission required in tx)
-            || (
-              isOwner(businessId)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'status', 'settlement', 'updatedBy', 'updatedAt'
-              ])
-              && (
-                (
-                  resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
-                  && request.resource.data.status == 'SETTLEMENT_REVIEW'
-                )
-                || (
-                  resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
-                  && request.resource.data.status == 'SETTLED'
-                  && request.resource.data.settlement is map
-                  && request.resource.data.settlement.paidAmountMinor is int
-                  && request.resource.data.settlement.paidAmountMinor >= 0
-                  && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
-                  && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
-                  && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
-                  && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
-                )
+              || (
+                resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+                && request.resource.data.status == 'SETTLED'
+                && request.resource.data.settlement is map
+                && request.resource.data.settlement.paidAmountMinor is int
+                && request.resource.data.settlement.paidAmountMinor >= 0
+                && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
+                && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
+                && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
+                && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
               )
             )
           );
