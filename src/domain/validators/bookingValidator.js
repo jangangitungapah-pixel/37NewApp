@@ -8,6 +8,7 @@ import {
   BOOKING_STATUS,
   ROLES,
   SCHEMA_VERSIONS,
+  SESSION_STATUS,
   STUDIO_STATUS,
 } from '../enums/roles.js';
 import { calculateOperatorCommission } from '../calculations/commissionCalculator.js';
@@ -27,6 +28,7 @@ const VALID_SLOT_KINDS = new Set(Object.values(BOOKING_SLOT_KIND));
 const VALID_EVENT_TYPES = new Set(Object.values(ACTIVITY_EVENT_TYPE));
 const VALID_ENTITY_TYPES = new Set(Object.values(ACTIVITY_ENTITY_TYPE));
 const VALID_INITIAL_STATUSES = new Set(Object.values(BOOKING_INITIAL_STATUS_POLICY));
+const VALID_SESSION_STATUSES = new Set(Object.values(SESSION_STATUS));
 
 /**
  * Complete booking operational + settlement lifecycle state transitions (Phase 03 + Phase 04).
@@ -265,25 +267,8 @@ export function buildValidatedNewBookingPayload({
     cancelReason: null,
     cancelledBy: null,
     cancelledAt: null,
-    sessionStatus: deriveSessionStatusFromBookingStatus(status),
-    checkedInAt: raw.checkedInAt ?? null,
-    checkedInByUid: optionalStringOrNull(raw.checkedInByUid, 'checkedInByUid'),
-    checkedInByName: optionalStringOrNull(raw.checkedInByName, 'checkedInByName'),
-    actualStartAt: raw.actualStartAt ?? null,
-    actualStartByUid: optionalStringOrNull(raw.actualStartByUid, 'actualStartByUid'),
-    actualStartByName: optionalStringOrNull(raw.actualStartByName, 'actualStartByName'),
-    actualEndAt: raw.actualEndAt ?? null,
-    actualEndByUid: optionalStringOrNull(raw.actualEndByUid, 'actualEndByUid'),
-    actualEndByName: optionalStringOrNull(raw.actualEndByName, 'actualEndByName'),
-    actualDurationMinutes: raw.actualDurationMinutes == null ? null : requireSafeInt(raw.actualDurationMinutes, 'actualDurationMinutes', { min: 0, max: 10080 }),
-    noShowAt: raw.noShowAt ?? null,
-    noShowByUid: optionalStringOrNull(raw.noShowByUid, 'noShowByUid'),
-    noShowByName: optionalStringOrNull(raw.noShowByName, 'noShowByName'),
-    noShowReason: optionalStringOrNull(raw.noShowReason, 'noShowReason'),
-    lastSessionEventId: optionalStringOrNull(raw.lastSessionEventId, 'lastSessionEventId'),
-    lastSessionEventAt: raw.lastSessionEventAt ?? null,
-    lastSessionEventType: optionalStringOrNull(raw.lastSessionEventType, 'lastSessionEventType'),
-    completedAt: raw.completedAt ?? null,
+    checkedInAt: null,
+    completedAt: null,
     rescheduleCount: 0,
     schemaVersion: SCHEMA_VERSIONS.BOOKING,
     createdBy: actorUid,
@@ -305,6 +290,11 @@ export function validateBookingDoc(raw) {
   const status = requireNonEmptyString(raw.status, 'status');
   if (!VALID_BOOKING_STATUSES.has(status)) {
     throw new DomainValidationError(`Status booking tidak dikenal: ${status}`, 'status');
+  }
+
+  const sessionStatus = raw.sessionStatus || deriveSessionStatusFromBookingStatus(status);
+  if (!VALID_SESSION_STATUSES.has(sessionStatus)) {
+    throw new DomainValidationError(`Status sesi tidak dikenal: ${sessionStatus}`, 'sessionStatus');
   }
 
   const dateKey = requireNonEmptyString(raw.dateKey, 'dateKey');
@@ -390,7 +380,24 @@ export function validateBookingDoc(raw) {
     cancelReason,
     cancelledBy: optionalStringOrNull(raw.cancelledBy, 'cancelledBy'),
     cancelledAt: raw.cancelledAt ?? null,
+    sessionStatus,
     checkedInAt: raw.checkedInAt ?? null,
+    checkedInByUid: optionalStringOrNull(raw.checkedInByUid, 'checkedInByUid'),
+    checkedInByName: optionalStringOrNull(raw.checkedInByName, 'checkedInByName'),
+    actualStartAt: raw.actualStartAt ?? null,
+    actualStartByUid: optionalStringOrNull(raw.actualStartByUid, 'actualStartByUid'),
+    actualStartByName: optionalStringOrNull(raw.actualStartByName, 'actualStartByName'),
+    actualEndAt: raw.actualEndAt ?? null,
+    actualEndByUid: optionalStringOrNull(raw.actualEndByUid, 'actualEndByUid'),
+    actualEndByName: optionalStringOrNull(raw.actualEndByName, 'actualEndByName'),
+    actualDurationMinutes: raw.actualDurationMinutes == null ? null : requireSafeInt(raw.actualDurationMinutes, 'actualDurationMinutes', { min: 0, max: 10080 }),
+    noShowAt: raw.noShowAt ?? null,
+    noShowByUid: optionalStringOrNull(raw.noShowByUid, 'noShowByUid'),
+    noShowByName: optionalStringOrNull(raw.noShowByName, 'noShowByName'),
+    noShowReason: optionalStringOrNull(raw.noShowReason, 'noShowReason'),
+    lastSessionEventId: optionalStringOrNull(raw.lastSessionEventId, 'lastSessionEventId'),
+    lastSessionEventAt: raw.lastSessionEventAt ?? null,
+    lastSessionEventType: optionalStringOrNull(raw.lastSessionEventType, 'lastSessionEventType'),
     completedAt: raw.completedAt ?? null,
     settlement: raw.settlement ?? null,
     rescheduleCount: requireSafeInt(raw.rescheduleCount ?? 0, 'rescheduleCount', { min: 0 }),
