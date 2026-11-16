@@ -145,6 +145,18 @@ export function CreateBookingModal({
     ? startTime
     : startOptions[0]?.timeHHmm || '10:00';
 
+  useEffect(() => {
+    if (durationOptions.length > 0 && !durationOptions.includes(Number(durationMinutes))) {
+      setValue('durationMinutes', durationOptions[0], { shouldValidate: true });
+    }
+  }, [durationOptions, durationMinutes, setValue]);
+
+  useEffect(() => {
+    if (startOptions.length > 0 && !startOptions.some((option) => option.timeHHmm === startTime)) {
+      setValue('startTime', startOptions[0].timeHHmm, { shouldValidate: true });
+    }
+  }, [startOptions, startTime, setValue]);
+
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(true);
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
@@ -227,9 +239,9 @@ export function CreateBookingModal({
     try {
       const slotPlan = computeBookingSlotPlan({
         studioId: selectedStudio.studioId,
-        dateKey,
-        startTime: effectiveStartTime,
-        durationMinutes: effectiveDuration,
+        dateKey: values.dateKey,
+        startTime: values.startTime,
+        durationMinutes: Number(values.durationMinutes),
         bufferMinutes: scheduleSetting?.bufferMinutes ?? 0,
         timezone: tz,
         operatingHours: selectedStudio.operatingHours,
