@@ -135,15 +135,10 @@ service cloud.firestore {
     // Requiring the booking to change in this same transaction avoids repeating
     // marker lookups for every slot in a multi-slot reservation.
     function hasMatchingSlotReservationAfter(businessId, bookingId, slotId, slotData, operationTypes) {
-      let targetBooking = bookingPath(businessId, bookingId);
-      let bookingExists = existsAfter(targetBooking);
-      let bookingData = bookingExists ? getAfter(targetBooking).data : {};
-      return bookingExists
-        && bookingId is string
-        && bookingData.studioId == slotData.studioId
+      let bookingData = getAfter(bookingPath(businessId, bookingId)).data;
+      return bookingData.studioId == slotData.studioId
         && bookingData.dateKey == slotData.dateKey
         && bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-        && bookingData.slotIds is list
         && bookingData.slotIds.hasAny([slotId])
         && bookingData.lastOperationType in operationTypes
         && bookingData.updatedBy == request.auth.uid
@@ -151,26 +146,18 @@ service cloud.firestore {
     }
 
     function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId, slotData) {
-      let targetBooking = bookingPath(businessId, bookingId);
-      let bookingExists = existsAfter(targetBooking);
-      let bookingData = bookingExists ? getAfter(targetBooking).data : {};
-      return bookingExists
-        && bookingId is string
-        && bookingData.studioId == studioId
+      let bookingData = getAfter(bookingPath(businessId, bookingId)).data;
+      return bookingData.studioId == studioId
         && bookingData.updatedBy == request.auth.uid
         && bookingData.updatedAt == request.time
-        && bookingData.slotIds is list
         && (
           (
             bookingData.status in ['CANCELLED', 'REJECTED', 'NO_SHOW']
-            && bookingData.dateKey == slotData.dateKey
             && bookingData.slotIds.hasAny([slotId])
-            && bookingData.lastOperationType == 'booking.session'
           )
           || (
             bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
             && !bookingData.slotIds.hasAny([slotId])
-            && bookingData.lastOperationType == 'booking.reschedule'
           )
         );
     }
@@ -795,24 +782,810 @@ service cloud.firestore {
         ])
         && data.slotId == slotId
         && data.businessId == businessId
-        && data.studioId is string
-        && data.studioId.size() >= 1
-        && data.dateKey is string
-        && data.dateKey.size() == 10
-        && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && data.bucketIndex is int
         && data.bucketIndex >= 0
         && data.bucketIndex <= 95
         && slotId == data.studioId + '__' + data.dateKey + '__' + (data.bucketIndex < 10 ? '0' + string(data.bucketIndex) : string(data.bucketIndex))
-        && data.slotTime is string
-        && data.slotTime.size() == 5
-        && data.slotTime.matches('^([01][0-9]|2[0-3]):(00|15|30|45)')
+        && data.slotTime.matches('^([01][0-9]|2[0-3]):(00|15|30|45)
+    function isValidActivityLogData(data, businessId, eventId) {
+      return data.keys().hasOnly([
+          'eventId', 'businessId', 'studioId', 'eventType', 'entityType', 'entityId',
+          'operationId', 'actorUid', 'actorRole', 'beforeStatus', 'afterStatus',
+          'reason', 'summary', 'schemaVersion', 'createdAt'
+        ])
+        && data.eventId == eventId
+        && data.businessId == businessId
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.entityType in ['booking', 'ledger_entry', 'commission_entry']
+        && data.entityId is string && data.entityId.size() >= 1
+        && data.operationId is string && data.operationId.size() >= 1
+        && data.eventType in [
+          'booking.created', 'booking.confirmed', 'booking.started',
+          'booking.completed', 'booking.cancelled', 'booking.no_show', 'booking.rescheduled',
+          'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
+        ]
+        && data.actorUid == request.auth.uid
+        && data.actorRole == currentMember(businessId).role
+        && isValidNullableString(data, 'beforeStatus', 60)
+        && data.afterStatus is string && data.afterStatus.size() >= 1
+        && isValidNullableString(data, 'reason', 300)
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidLedgerEntryData(data, businessId, entryId) {
+      return data.keys().hasOnly([
+          'entryId', 'businessId', 'bookingId', 'studioId', 'dateKey',
+          'type', 'direction', 'amountMinor', 'currency', 'paymentMethod',
+          'reference', 'notes', 'relatedEntryId', 'reason', 'schemaVersion',
+          'createdAt', 'createdBy'
+        ])
+        && data.entryId == entryId
+        && data.businessId == businessId
+        && data.bookingId is string && data.bookingId.size() >= 1
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.type in ['PAYMENT_RECEIVED', 'REFUND', 'ADJUSTMENT', 'REVERSAL']
+        && data.direction in ['inflow', 'outflow']
+        && data.amountMinor is int && data.amountMinor >= 0
+        && data.currency == 'IDR'
+        && (!('paymentMethod' in data) || data.paymentMethod == null || data.paymentMethod in ['cash', 'transfer', 'qris', 'card', 'other'])
+        && isValidNullableString(data, 'reference', 120)
+        && isValidNullableString(data, 'notes', 300)
+        && isValidNullableString(data, 'relatedEntryId', 160)
+        && isValidNullableString(data, 'reason', 300)
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidCommissionEntryData(data, businessId, entryId) {
+      return data.keys().hasOnly([
+          'entryId', 'businessId', 'bookingId', 'studioId', 'dateKey', 'operatorUid',
+          'entryType', 'direction', 'amountMinor', 'currency', 'method', 'rateOrValue',
+          'basis', 'basisAmountMinor', 'source', 'relatedEntryId', 'reason', 'status',
+          'schemaVersion', 'createdAt', 'createdBy'
+        ])
+        && data.entryId == entryId
+        && data.businessId == businessId
+        && data.bookingId is string && data.bookingId.size() >= 1
+        && data.studioId is string && data.studioId.size() >= 1
+        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.operatorUid is string && data.operatorUid.size() >= 1
+        && data.entryType in ['EARNED', 'ADJUSTMENT', 'REVERSAL']
+        && data.direction in ['credit', 'debit']
+        && data.amountMinor is int && data.amountMinor >= 0
+        && data.currency == 'IDR'
+        && data.method in ['inherit', 'none', 'percentage', 'fixed_per_booking']
+        && data.rateOrValue is int && data.rateOrValue >= 0
+        && data.basis in ['subtotal', 'settled_amount']
+        && data.basisAmountMinor is int && data.basisAmountMinor >= 0
+        && data.source is string && data.source.size() >= 1
+        && isValidNullableString(data, 'relatedEntryId', 160)
+        && isValidNullableString(data, 'reason', 300)
+        && data.status in ['RECORDED', 'ADJUSTED', 'REVERSED']
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidNotificationData(data, businessId, notificationId) {
+      return data.keys().hasOnly([
+          'notificationId', 'businessId', 'studioId', 'recipientUid', 'eventId',
+          'type', 'channel', 'entityType', 'entityId', 'title', 'message',
+          'actionPath', 'readAt', 'createdBy', 'createdAt', 'schemaVersion'
+        ])
+        && data.notificationId == notificationId
+        && data.businessId == businessId
+        && isValidNullableString(data, 'studioId', 128)
+        && data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid != '*'
+        && data.eventId is string && data.eventId.size() >= 1
+        && data.type in [
+          'BOOKING_CREATED', 'BOOKING_CONFIRMED', 'BOOKING_STARTED',
+          'BOOKING_COMPLETED', 'BOOKING_CANCELLED', 'BOOKING_RESCHEDULED',
+          'BOOKING_SETTLED', 'SETTLEMENT_REVIEW_REQUIRED', 'TEAM_ASSIGNMENT_UPDATED'
+        ]
+        && data.channel == 'in_app'
+        && data.entityType in ['booking', 'settlement', 'member']
+        && data.entityId is string && data.entityId.size() >= 1
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 300
+        && isValidNullableString(data, 'actionPath', 160)
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function isValidGalleryAssetData(data, businessId, assetId) {
+      return data.keys().hasOnly([
+          'assetId', 'businessId', 'studioId', 'publicId', 'secureUrl', 'format',
+          'width', 'height', 'bytes', 'caption', 'altText', 'order', 'status',
+          'uploadedBy', 'uploadedAt', 'createdAt', 'updatedAt', 'updatedBy', 'schemaVersion'
+        ])
+        && data.assetId == assetId
+        && data.businessId == businessId
+        && isValidNullableString(data, 'studioId', 100)
+        && data.publicId is string && data.publicId.size() >= 1 && data.publicId.size() <= 240
+        && data.secureUrl is string
+        && data.secureUrl.size() > 27 && data.secureUrl.size() <= 500
+        && data.secureUrl.matches('^https://res\\.cloudinary\\.com/.+')
+        && data.format in ['jpg', 'jpeg', 'png', 'webp']
+        && data.width is int && data.width >= 1 && data.width <= 20000
+        && data.height is int && data.height >= 1 && data.height <= 20000
+        && data.bytes is int && data.bytes >= 1 && data.bytes <= 52428800
+        && isValidNullableString(data, 'caption', 200)
+        && isValidNullableString(data, 'altText', 200)
+        && data.order is int && data.order >= 0 && data.order <= 10000
+        && data.status in ['active', 'archived']
+        && data.uploadedBy is string && data.uploadedBy.size() >= 1
+        && isValidNullableString(data, 'updatedBy', 128)
+        && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global user profile (must NEVER contain role/permission/business access)
+    // -------------------------------------------------------------------------
+    match /users/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create: if isSelf(uid)
+        && isValidUserProfileData(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isSelf(uid)
+        && isValidUserProfileData(request.resource.data)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection group query for discovering own business memberships
+    // -------------------------------------------------------------------------
+    match /{path=**}/members/{memberUid} {
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // -------------------------------------------------------------------------
+    // Tenant-scoped business root & master data (Phase 01 + Phase 02)
+    // -------------------------------------------------------------------------
+    match /businesses/{businessId} {
+      allow get: if hasActiveMembership(businessId);
+      allow list: if false;
+
+      // Initial business creation (atomic with founder active owner doc)
+      allow create: if isSignedIn()
+        && !exists(businessPath(businessId))
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && isValidBusinessData(request.resource.data, businessId)
+        && getAfter(memberPath(businessId, request.auth.uid)).data.uid == request.auth.uid
+        && getAfter(memberPath(businessId, request.auth.uid)).data.role == 'owner'
+        && getAfter(memberPath(businessId, request.auth.uid)).data.status == 'active';
+
+      allow update: if isOwner(businessId)
+        && isValidBusinessData(request.resource.data, businessId)
+        && request.resource.data.businessId == resource.data.businessId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow get: if isOwner(businessId) || (isSelf(memberUid) && (resource == null || resource.data.uid == request.auth.uid));
+        allow list: if isOwner(businessId);
+
+        allow create: if isValidMemberData(request.resource.data, memberUid)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (
+            isOwner(businessId)
+            || (
+              isSelf(memberUid)
+              && !exists(businessPath(businessId))
+              && request.resource.data.role == 'owner'
+              && request.resource.data.status == 'active'
+              && getAfter(businessPath(businessId)).data.ownerUid == request.auth.uid
+              && getAfter(businessPath(businessId)).data.businessId == businessId
+            )
+          );
+
+        allow update: if isOwner(businessId)
+          && isValidMemberData(request.resource.data, memberUid)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (!isSelf(memberUid) || (request.resource.data.role == 'owner' && request.resource.data.status == 'active'));
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Business Profile (`profile/main`)
+      // -----------------------------------------------------------------------
+      match /profile/{docId} {
+        allow get: if docId == 'main' && hasActiveMembership(businessId);
+        allow list: if false;
+
+        allow create: if isOwner(businessId)
+          && docId == 'main'
+          && isValidBusinessProfileData(request.resource.data, businessId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && docId == 'main'
+          && isValidBusinessProfileData(request.resource.data, businessId)
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Settings (`business | schedule | pricing | commission | bookingPolicy`)
+      // -----------------------------------------------------------------------
+      match /settings/{settingId} {
+        allow get, list: if hasActiveMembership(businessId);
+
+        allow create: if isOwner(businessId)
+          && settingId in ['business', 'schedule', 'pricing', 'commission', 'bookingPolicy']
+          && isValidSettingData(request.resource.data, businessId, settingId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && settingId in ['business', 'schedule', 'pricing', 'commission', 'bookingPolicy']
+          && isValidSettingData(request.resource.data, businessId, settingId)
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.settingId == resource.data.settingId
+          && request.resource.data.configVersion >= resource.data.configVersion
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Studios / Rooms (Owner full; Operator read assigned only)
+      // -----------------------------------------------------------------------
+      match /studios/{studioId} {
+        allow get: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && studioId in currentMember(businessId).assignedStudioIds
+            && (resource == null || resource.data.studioId == studioId)
+          );
+        allow list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if isOwner(businessId)
+          && isValidStudioData(request.resource.data, businessId, studioId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && isValidStudioData(request.resource.data, businessId, studioId)
+          && request.resource.data.studioId == resource.data.studioId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Services & Versioned Pricing Config
+      // -----------------------------------------------------------------------
+      match /services/{serviceId} {
+        allow get, list: if hasActiveMembership(businessId);
+
+        allow create: if isOwner(businessId)
+          && isValidServiceData(request.resource.data, businessId, serviceId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(businessId)
+          && isValidServiceData(request.resource.data, businessId, serviceId)
+          && request.resource.data.serviceId == resource.data.serviceId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.configVersion >= resource.data.configVersion
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 02: Customers (Owner full CRUD sans delete; Operator active operational access)
+      // -----------------------------------------------------------------------
+      match /customers/{customerId} {
+        allow get, list: if canAccessCustomers(businessId);
+
+        allow create: if canAccessCustomers(businessId)
+          && isValidCustomerData(request.resource.data, businessId, customerId)
+          && (isOwner(businessId) || request.resource.data.status == 'active')
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if canAccessCustomers(businessId)
+          && isValidCustomerData(request.resource.data, businessId, customerId)
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.businessId == resource.data.businessId
+          && (isOwner(businessId) || request.resource.data.status == resource.data.status)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 03: Booking Engine, Atomic Slot Locks & Append-Only Activity Logs
+      // -----------------------------------------------------------------------
+      match /bookings/{bookingId} {
+        allow get, list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
+          );
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && isValidBookingData(request.resource.data, businessId, bookingId)
+          && request.resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+          && request.resource.data.sessionStatus == (
+            request.resource.data.status == 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING'
+          )
+          && request.resource.data.rescheduleCount == 0
+          && exists(studioPath(businessId, request.resource.data.studioId))
+          && get(studioPath(businessId, request.resource.data.studioId)).data.status == 'active'
+          && (
+            request.resource.data.priceSnapshot.discountMinor == 0
+            || isOwner(businessId)
+            || (
+              currentMember(businessId).get(['permissions', 'canApplyDiscount'], false) == true
+              && exists(settingPath(businessId, 'pricing'))
+              && get(settingPath(businessId, 'pricing')).data.allowOperatorDiscount == true
+            )
+          )
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastOperationType == 'booking.create'
+          && hasMatchingBookingOperationAfter(businessId, bookingId, request.resource.data.studioId, request.resource.data, 'booking.create')
+;
+
+        allow update: if isValidBookingSessionUpdate(businessId, bookingId, resource.data, request.resource.data)
+          || (
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status == 'PENDING_CONFIRMATION'
+            && request.resource.data.status == 'CONFIRMED'
+            && request.resource.data.sessionStatus == 'UPCOMING'
+            && request.resource.data.lastOperationType == 'booking.decision'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'sessionStatus', 'lastOperationId', 'lastOperationType',
+              'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+            ])
+            && hasMatchingBookingOperationAfter(businessId, bookingId, resource.data.studioId, request.resource.data, 'booking.decision')
+
+          )
+          || (
+            canOperateStudioBooking(businessId, resource.data.studioId)
+            && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
+            && request.resource.data.lastOperationType == 'booking.reschedule'
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+              'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+              'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
+              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
+            ])
+            && hasMatchingBookingOperationAfter(businessId, bookingId, resource.data.studioId, request.resource.data, 'booking.reschedule')
+
+            && request.resource.data.endAt > request.resource.data.startAt
+            && request.resource.data.slotIds is list
+            && request.resource.data.slotIds.size() >= 1
+            && request.resource.data.slotIds.size() <= 96
+            && (
+              request.resource.data.durationMinutes != resource.data.durationMinutes
+              || (
+                request.resource.data.priceSnapshot == resource.data.priceSnapshot
+                && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
+              )
+            )
+          )
+          || (
+            isOwner(businessId)
+            && request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'settlement', 'updatedBy', 'updatedAt'
+            ])
+            && (
+              (
+                resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
+                && request.resource.data.status == 'SETTLEMENT_REVIEW'
+              )
+              || (
+                resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+                && request.resource.data.status == 'SETTLED'
+                && request.resource.data.settlement is map
+                && request.resource.data.settlement.paidAmountMinor is int
+                && request.resource.data.settlement.paidAmountMinor >= 0
+                && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
+                && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
+                && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
+                && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
+              )
+            )
+          );
+
+        allow delete: if false;
+      }
+
+      match /bookingSlots/{slotId} {
+        allow get: if (
+          resource == null
+            ? (slotId.split('__').size() == 3 && canOperateStudioBooking(businessId, slotId.split('__')[0]))
+            : canOperateStudioBooking(businessId, resource.data.studioId)
+        );
+
+        allow list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if isValidBookingSlotData(request.resource.data, businessId, slotId)
+          && request.resource.data.status == 'active'
+          && request.resource.data.reservedBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.reservedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, slotId, request.resource.data, ['booking.create', 'booking.reschedule']);
+
+        allow update: if isValidBookingSlotData(request.resource.data, businessId, slotId)
+          && request.resource.data.slotId == resource.data.slotId
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.studioId == resource.data.studioId
+          && request.resource.data.dateKey == resource.data.dateKey
+          && request.resource.data.bucketIndex == resource.data.bucketIndex
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            (
+              resource.data.status == 'released'
+              && request.resource.data.status == 'active'
+              && request.resource.data.bookingId is string
+              && request.resource.data.reservedBy == request.auth.uid
+              && request.resource.data.reservedAt == request.time
+              && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, slotId, request.resource.data, ['booking.create', 'booking.reschedule'])
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'active'
+              && resource.data.bookingId == request.resource.data.bookingId
+              && request.resource.data.reservedBy == resource.data.reservedBy
+              && request.resource.data.reservedAt == resource.data.reservedAt
+              && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, slotId, request.resource.data, ['booking.reschedule'])
+            )
+            || (
+              resource.data.status == 'active'
+              && request.resource.data.status == 'released'
+              && request.resource.data.bookingId == null
+              && request.resource.data.releasedAt == request.time
+              && hasMatchingSlotReleaseAfter(businessId, resource.data.bookingId, resource.data.studioId, slotId, resource.data)
+            )
+          );
+
+        allow delete: if false;
+      }
+
+      match /activityLogs/{eventId} {
+        allow get, list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && resource != null
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && isValidActivityLogData(request.resource.data, businessId, eventId)
+          && (
+            isOwner(businessId)
+            || (
+              request.resource.data.entityType == 'booking'
+              && !(request.resource.data.eventType in [
+                'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
+              ])
+            )
+          )
+          && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if false;
+      }
+      match /bookingOperations/{operationId} {
+        allow get: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
+          );
+        allow list: if false;
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && request.resource.data.keys().hasOnly([
+            'operationId', 'requestId', 'payloadHash', 'operationType', 'action',
+            'businessId', 'bookingId', 'studioId', 'actorUid', 'actorRole',
+            'resultBookingStatus', 'resultSessionStatus', 'schemaVersion', 'createdAt'
+          ])
+          && request.resource.data.operationId == operationId
+          && request.resource.data.businessId == businessId
+          && request.resource.data.bookingId is string
+          && request.resource.data.studioId is string
+          && request.resource.data.operationType in ['booking.create', 'booking.decision', 'booking.reschedule', 'booking.session']
+          && (
+            (request.resource.data.operationType == 'booking.create' && request.resource.data.action == 'create')
+            || (request.resource.data.operationType == 'booking.decision' && request.resource.data.action == 'decision:CONFIRMED')
+            || (request.resource.data.operationType == 'booking.reschedule' && request.resource.data.action == 'reschedule')
+            || (request.resource.data.operationType == 'booking.session' && request.resource.data.action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject'])
+          )
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorRole == currentMember(businessId).role
+          && request.resource.data.requestId is string
+          && request.resource.data.requestId.size() >= 8
+          && request.resource.data.requestId.size() <= 128
+          && request.resource.data.payloadHash is string
+          && request.resource.data.payloadHash.matches('^[a-f0-9]{16,64}$')
+          && request.resource.data.resultBookingStatus is string
+          && request.resource.data.resultSessionStatus is string
+          && request.resource.data.schemaVersion is int
+          && request.resource.data.schemaVersion >= 1
+          && request.resource.data.createdAt == request.time
+          && hasMatchingBookingOperationDocumentAfter(businessId, operationId, request.resource.data);
+
+        allow update, delete: if false;
+      }
+
+      match /bookingSessionEvents/{eventId} {
+        allow get: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && (
+              resource == null
+              || resource.data.studioId in currentMember(businessId).assignedStudioIds
+            )
+          );
+        allow list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && currentMember(businessId).get(['permissions', 'canManageBookings'], false) == true
+            && resource.data.studioId in currentMember(businessId).assignedStudioIds
+          );
+
+        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
+          && request.resource.data.keys().hasOnly([
+            'eventId', 'businessId', 'bookingId', 'studioId', 'action',
+            'fromStatus', 'toStatus', 'actorUid', 'actorRole', 'actorName',
+            'reason', 'operationId', 'requestId', 'payloadHash', 'schemaVersion', 'createdAt'
+          ])
+          && request.resource.data.eventId == eventId
+          && request.resource.data.operationId == eventId
+          && request.resource.data.businessId == businessId
+          && request.resource.data.bookingId is string
+          && request.resource.data.studioId is string
+          && request.resource.data.action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject']
+          && request.resource.data.fromStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
+          && request.resource.data.toStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED']
+          && (
+            (request.resource.data.action == 'check_in' && request.resource.data.fromStatus == 'UPCOMING' && request.resource.data.toStatus == 'UPCOMING')
+            || (request.resource.data.action == 'start' && request.resource.data.fromStatus == 'UPCOMING' && request.resource.data.toStatus == 'IN_PROGRESS')
+            || (request.resource.data.action == 'complete' && request.resource.data.fromStatus == 'IN_PROGRESS' && request.resource.data.toStatus == 'COMPLETED')
+            || (request.resource.data.action == 'no_show' && request.resource.data.fromStatus == 'UPCOMING' && request.resource.data.toStatus == 'NO_SHOW')
+            || (request.resource.data.action == 'cancel' && request.resource.data.fromStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS'] && request.resource.data.toStatus == 'CANCELLED')
+            || (request.resource.data.action == 'reject' && request.resource.data.fromStatus == 'PENDING' && request.resource.data.toStatus == 'CANCELLED')
+          )
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorRole == currentMember(businessId).role
+          && request.resource.data.actorName is string
+          && request.resource.data.actorName.size() >= 1
+          && request.resource.data.actorName.size() <= 120
+          && isValidNullableString(request.resource.data, 'reason', 300)
+          && request.resource.data.requestId is string
+          && request.resource.data.requestId.size() >= 8
+          && request.resource.data.requestId.size() <= 128
+          && request.resource.data.payloadHash is string
+          && request.resource.data.payloadHash.matches('^[a-f0-9]{16,64}$')
+          && request.resource.data.schemaVersion is int
+          && request.resource.data.schemaVersion >= 1
+          && request.resource.data.createdAt == request.time
+          && hasMatchingBookingSessionEventDocumentAfter(businessId, eventId, request.resource.data);
+
+        allow update, delete: if false;
+      }
+
+
+      // -----------------------------------------------------------------------
+      // Phase 04: Immutable Financial Ledger & Operator Commission Entries
+      // -----------------------------------------------------------------------
+      match /ledgerEntries/{entryId} {
+        allow get, list: if isOwner(businessId);
+
+        allow create: if isOwner(businessId)
+          && isValidLedgerEntryData(request.resource.data, businessId, entryId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (
+            request.resource.data.relatedEntryId == null
+            || exists(ledgerEntryPath(businessId, request.resource.data.relatedEntryId))
+          );
+
+        allow update, delete: if false;
+      }
+
+      match /commissionEntries/{entryId} {
+        allow get, list: if isOwner(businessId)
+          || (
+            hasActiveMembership(businessId)
+            && resource != null
+            && resource.data.operatorUid == request.auth.uid
+          );
+
+        allow create: if isOwner(businessId)
+          && isValidCommissionEntryData(request.resource.data, businessId, entryId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (
+            request.resource.data.relatedEntryId == null
+            || exists(commissionEntryPath(businessId, request.resource.data.relatedEntryId))
+          );
+
+        allow update, delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 05: Scoped In-App Notifications
+      // -----------------------------------------------------------------------
+      match /notifications/{notificationId} {
+        allow get, list: if hasActiveMembership(businessId)
+          && resource != null
+          && resource.data.recipientUid == request.auth.uid;
+
+        allow create: if isValidNotificationData(request.resource.data, businessId, notificationId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.readAt == null
+          && exists(memberPath(businessId, request.resource.data.recipientUid))
+          && (
+            isOwner(businessId)
+            || (
+              hasActiveMembership(businessId)
+              && request.resource.data.studioId != null
+              && request.resource.data.studioId in currentMember(businessId).assignedStudioIds
+              && request.resource.data.type in [
+                'BOOKING_CREATED', 'BOOKING_CONFIRMED', 'BOOKING_STARTED',
+                'BOOKING_COMPLETED', 'BOOKING_CANCELLED', 'BOOKING_RESCHEDULED'
+              ]
+            )
+          );
+
+        allow update: if hasActiveMembership(businessId)
+          && resource.data.recipientUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // -----------------------------------------------------------------------
+      // Phase 06: Gallery Assets (Cloudinary Metadata & Soft-Archive)
+      // -----------------------------------------------------------------------
+      match /galleryAssets/{assetId} {
+        allow read: if hasActiveMembership(businessId);
+
+        allow create: if canManageGallery(businessId)
+          && isValidGalleryAssetData(request.resource.data, businessId, assetId)
+          && request.resource.data.status == 'active'
+          && request.resource.data.uploadedBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.uploadedAt == request.time
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if (
+            (
+              canManageGallery(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['studioId', 'caption', 'altText', 'order', 'updatedBy', 'updatedAt'])
+            )
+            || (
+              isOwner(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['studioId', 'caption', 'altText', 'order', 'status', 'updatedBy', 'updatedAt'])
+              && request.resource.data.status in ['active', 'archived']
+            )
+          )
+          && isValidNullableString(request.resource.data, 'studioId', 100)
+          && isValidNullableString(request.resource.data, 'caption', 200)
+          && isValidNullableString(request.resource.data, 'altText', 200)
+          && request.resource.data.order is int
+          && request.resource.data.order >= 0
+          && request.resource.data.order <= 10000
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.publicId == resource.data.publicId
+          && request.resource.data.secureUrl == resource.data.secureUrl
+          && request.resource.data.format == resource.data.format
+          && request.resource.data.width == resource.data.width
+          && request.resource.data.height == resource.data.height
+          && request.resource.data.bytes == resource.data.bytes
+          && request.resource.data.uploadedBy == resource.data.uploadedBy
+          && request.resource.data.uploadedAt == resource.data.uploadedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.businessId == resource.data.businessId
+          && request.resource.data.assetId == resource.data.assetId;
+
+        allow delete: if false;
+      }
+    }
+
+    // Default deny fallback for every other path
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+)
         && data.kind in ['session', 'buffer']
+        && data.bookingId is string
         && data.slotStartAt is timestamp
         && data.slotEndAt is timestamp
         && data.slotEndAt > data.slotStartAt
         && data.reservedBy is string
-        && data.reservedBy.size() >= 1
         && data.schemaVersion is int
         && data.schemaVersion >= 1;
     }
