@@ -361,6 +361,91 @@ async function runSessionTransition(dbClient, {
   });
 }
 
+async function seedTenantForPhase03() {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const adminDb = ctx.firestore();
+    const now = new Date();
+
+    await setDoc(doc(adminDb, 'businesses', BIZ_ID), {
+      businessId: BIZ_ID,
+      name: '37 Music Studio',
+      slug: '37-music-studio',
+      ownerUid: OWNER_UID,
+      timezone: 'Asia/Jakarta',
+      currency: 'IDR',
+      status: 'active',
+      schemaVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: OWNER_UID,
+      updatedBy: OWNER_UID,
+    });
+
+    const members = [
+      {
+        uid: OWNER_UID,
+        email: 'owner@37musicstudio.test',
+        displayName: 'Studio Owner',
+        role: 'owner',
+        assignedStudioIds: [],
+        permissions: { canManageBookings: true },
+      },
+      {
+        uid: OP_A_UID,
+        email: 'operator-a@37musicstudio.test',
+        displayName: 'Operator Studio A',
+        role: 'operator',
+        assignedStudioIds: ['studio-a'],
+        permissions: { canManageBookings: true },
+      },
+      {
+        uid: OP_RESTRICTED_UID,
+        email: 'operator-restricted@37musicstudio.test',
+        displayName: 'Restricted Operator',
+        role: 'operator',
+        assignedStudioIds: [],
+        permissions: { canManageBookings: true },
+      },
+    ];
+
+    await Promise.all(members.map((member) => setDoc(
+      doc(adminDb, 'businesses', BIZ_ID, 'members', member.uid),
+      {
+        ...member,
+        businessId: BIZ_ID,
+        status: 'active',
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: OWNER_UID,
+        updatedBy: OWNER_UID,
+      },
+    )));
+
+    const studios = [
+      { studioId: 'studio-a', name: 'Studio A (Main)', code: 'STUDIO-A', slotGranularityMinutes: 15 },
+      { studioId: 'studio-b', name: 'Studio B (Mixing)', code: 'STUDIO-B', slotGranularityMinutes: 30 },
+    ];
+
+    await Promise.all(studios.map((studio) => setDoc(
+      doc(adminDb, 'businesses', BIZ_ID, 'studios', studio.studioId),
+      {
+        ...studio,
+        businessId: BIZ_ID,
+        status: 'active',
+        timezone: 'Asia/Jakarta',
+        operatingHours: { openTime: '10:00', closeTime: '22:00' },
+        description: studio.name,
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: OWNER_UID,
+        updatedBy: OWNER_UID,
+      },
+    )));
+  });
+}
+
 describe('Phase 10 booking/session Firestore Rules & atomic transactions', () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
