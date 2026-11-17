@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Local verification harness for Phase 10 booking/session lifecycle and Firestore Rules.
+    Local verification harness for Phase 11 booking/session integration and Firestore Rules.
 
 .DESCRIPTION
     Executes PowerShell syntax parsing, branch verification, runtime checks, ESLint,
-    targeted Vitest unit tests, Firestore Rules emulator tests, Vite production build,
+    targeted booking/session and UI Vitest unit tests, Firestore Rules emulator tests, Vite production build,
     and final local Git state inspection. Captures child-process exit codes directly
     via System.Diagnostics.Process so non-zero failures always fail the run reliably
     under Windows PowerShell 5.1 and PowerShell 7 without treating normal native stderr
@@ -15,7 +15,9 @@ param(
     [string]$ExpectedBranch = 'feature/phase-10-booking-session-lifecycle',
     [string[]]$UnitTestFiles = @(
         'tests/unit/bookingSessionLifecycle.test.js',
-        'tests/unit/bookingSlotAndValidator.test.js'
+        'tests/unit/bookingSlotAndValidator.test.js',
+        'tests/unit/bookingSessionUseCases.test.js',
+        'tests/unit/BookingDetailModal.test.jsx'
     ),
     [string[]]$ExtraRulesArgs = @()
 )
@@ -26,7 +28,11 @@ $ProgressPreference = 'SilentlyContinue'
 
 $RepoRoot = (Resolve-Path -Path $PSScriptRoot).Path
 $Timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$LogPath = Join-Path -Path $RepoRoot -ChildPath ("verify-phase10-booking-rules-{0}.txt" -f $Timestamp)
+$LogDirectory = Join-Path -Path $RepoRoot -ChildPath 'logs'
+if (-not (Test-Path -LiteralPath $LogDirectory)) {
+    New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+}
+$LogPath = Join-Path -Path $LogDirectory -ChildPath ("phase11-verification-{0}.txt" -f $Timestamp)
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $LogWriter = New-Object System.IO.StreamWriter($LogPath, $false, $Utf8NoBom)
 $LogWriter.AutoFlush = $true
@@ -222,7 +228,7 @@ function Invoke-LoggedNativeStep {
 $OverallPassed = $false
 
 try {
-    Write-Log 'PHASE 10 BOOKING/SESSION & FIRESTORE RULES VERIFICATION'
+    Write-Log 'PHASE 11 BOOKING/SESSION INTEGRATION & FIRESTORE RULES VERIFICATION'
     Write-Log ("REPO_ROOT: {0}" -f $RepoRoot)
     Write-Log ("LOG_FILE: {0}" -f $LogPath)
     Write-Log ("POWERSHELL_VERSION: {0}" -f $PSVersionTable.PSVersion.ToString())
@@ -254,7 +260,7 @@ try {
         Write-Log ("EXPECTED_BRANCH: {0}" -f $ExpectedBranch)
         Write-Log ("CURRENT_BRANCH:  {0}" -f $currentBranch)
         if ($currentBranch -ne $ExpectedBranch) {
-            Write-Log 'BRANCH_MISMATCH: Current branch does not match expected Phase 10 branch.'
+            Write-Log 'BRANCH_MISMATCH: Current branch does not match expected Phase 11 implementation branch.'
             return 1
         }
         return 0

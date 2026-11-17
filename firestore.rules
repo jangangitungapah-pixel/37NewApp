@@ -653,9 +653,14 @@ service cloud.firestore {
         && hasMatchingBookingSessionEventAfter(businessId, bookingId, oldData.studioId, newData, fromSessionStatus, m.role)
         && (
           (
-            oldData.status == 'CONFIRMED'
-            && action in ['check_in', 'start', 'complete', 'no_show']
-            && newData[stampPrefix + 'At'] == request.time
+            (
+              oldData.status == 'CONFIRMED'
+              && action in ['check_in', 'start', 'complete', 'no_show']
+            )
+            // Legacy sessions used booking.status = IN_PROGRESS; allow only their real completion.
+            || (oldData.status == 'IN_PROGRESS' && action == 'complete')
+          )
+          && newData[stampPrefix + 'At'] == request.time
             && newData[stampPrefix + 'ByUid'] == request.auth.uid
             && newData[stampPrefix + 'ByName'] is string
             && (

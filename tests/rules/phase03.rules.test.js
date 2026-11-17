@@ -9,6 +9,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -277,7 +278,13 @@ async function runSessionTransition(dbClient, {
     if (operationSnap.exists()) return;
 
     const booking = bookingSnap.data();
-    const fromStatus = booking.sessionStatus || (booking.status === 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING');
+    const fromStatus = booking.sessionStatus || (
+      booking.status === 'PENDING_CONFIRMATION'
+        ? 'PENDING'
+        : booking.status === 'IN_PROGRESS'
+          ? 'IN_PROGRESS'
+          : 'UPCOMING'
+    );
     const slotRefs = ['cancel', 'reject', 'no_show'].includes(action)
       ? (booking.slotIds || []).map((slotId) => doc(dbClient, 'businesses', BIZ_ID, 'bookingSlots', slotId))
       : [];
@@ -852,6 +859,79 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
       const slot = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId))).data();
       expect(slot.status).toBe('released');
       expect(slot.bookingId).toBeNull();
+    }
+  });
+
+
+  it('completes a legacy IN_PROGRESS booking only when its actual start timestamp exists, preserving held slots', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '16:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-legacy-complete');
+      await tx.get(bookingRef);
+      const refs = plan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-legacy-complete',
+        studioId: 'studio-a',
+        actorUid: OWNER_UID,
+        slotPlan: plan,
+        slotSnapshots: snapshots,
+      });
+    }));
+
+    const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-legacy-complete');
+    const legacyActualStart = Timestamp.fromDate(new Date(Date.now() - 120_000));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'businesses', BIZ_ID, 'bookings', 'bk-legacy-complete'), {
+        status: 'IN_PROGRESS',
+        sessionStatus: deleteField(),
+        actualStartAt: legacyActualStart,
+        actualStartByUid: OWNER_UID,
+        actualStartByName: 'Legacy Owner',
+      });
+    });
+
+    const legacyBefore = (await getDoc(bookingRef)).data();
+    expect(legacyBefore.status).toBe('IN_PROGRESS');
+    expect(legacyBefore.sessionStatus).toBeUndefined();
+    expect(legacyBefore.actualStartAt.toMillis()).toBe(legacyActualStart.toMillis());
+
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-legacy-complete',
+      actorUid: OWNER_UID,
+      action: 'complete',
+    }));
+
+    const completed = (await getDoc(bookingRef)).data();
+    expect(completed.status).toBe('COMPLETED_PENDING_SETTLEMENT');
+    expect(completed.sessionStatus).toBe('COMPLETED');
+    expect(completed.actualStartAt.toMillis()).toBe(legacyActualStart.toMillis());
+    expect(completed.actualEndAt).toBeDefined();
+    expect(completed.actualDurationMinutes).toBeGreaterThanOrEqual(0);
+
+    const event = (await getDoc(doc(
+      ownerDb,
+      'businesses',
+      BIZ_ID,
+      'bookingSessionEvents',
+      'booking_session__complete__bk-legacy-complete',
+    ))).data();
+    expect(event.fromStatus).toBe('IN_PROGRESS');
+    expect(event.toStatus).toBe('COMPLETED');
+
+    for (const slotId of plan.slotIds) {
+      const slot = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId))).data();
+      expect(slot.status).toBe('active');
+      expect(slot.bookingId).toBe('bk-legacy-complete');
     }
   });
 
