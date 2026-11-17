@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -95,12 +95,20 @@ export function BookingDetailModal({
   const scheduledStartMs = booking.startAt instanceof Date
     ? booking.startAt.getTime()
     : booking.startAt?.toDate?.()?.getTime?.() || 0;
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const refreshClock = () => setClockNow(Date.now());
+    const intervalId = window.setInterval(refreshClock, 15_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const noShowEligible = Boolean(
     booking.status === BOOKING_STATUS.CONFIRMED
     && sessionStatus === SESSION_STATUS.UPCOMING
     && !booking.checkedInAt
     && scheduledStartMs > 0
-    && Date.now() >= scheduledStartMs + 15 * 60 * 1000
+    && clockNow >= scheduledStartMs + 15 * 60 * 1000
   );
   const [reasonText, setReasonText] = useState('');
   const [newDateKey, setNewDateKey] = useState(booking.dateKey);
@@ -317,7 +325,7 @@ export function BookingDetailModal({
     SESSION_STATUS.IN_PROGRESS,
   ].includes(sessionStatus);
   const noShowGraceRemaining = scheduledStartMs > 0
-    ? Math.max(0, Math.ceil((scheduledStartMs + 15 * 60 * 1000 - Date.now()) / 60000))
+    ? Math.max(0, Math.ceil((scheduledStartMs + 15 * 60 * 1000 - clockNow) / 60000))
     : null;
 
   return (
