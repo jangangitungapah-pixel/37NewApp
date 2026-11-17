@@ -1155,6 +1155,9 @@ service cloud.firestore {
         allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
           && isValidBookingData(request.resource.data, businessId, bookingId)
           && request.resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+          && request.resource.data.sessionStatus == (
+            request.resource.data.status == 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING'
+          )
           && request.resource.data.rescheduleCount == 0
           && exists(studioPath(businessId, request.resource.data.studioId))
           && get(studioPath(businessId, request.resource.data.studioId)).data.status == 'active'
