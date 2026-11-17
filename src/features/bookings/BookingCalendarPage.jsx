@@ -656,8 +656,8 @@ export function BookingCalendarPage() {
                   }}
                   onClick={() => setSelectedBookingId(b.bookingId)}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                    <span className="mono" style={{ fontWeight: 700, fontSize: '13px', color: 'var(--accent-brass)' }}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-full text-xs font-semibold text-foreground sm:w-auto">
                       {b.startTime}–{b.endTime} ({b.timezone || tz}) · {b.durationMinutes} menit
                     </span>
                     <span className={`badge ${meta.badgeClass}`}>Booking · {meta.label}</span>
