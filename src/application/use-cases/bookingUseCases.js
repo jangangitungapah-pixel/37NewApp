@@ -294,7 +294,7 @@ export async function rescheduleBookingUseCase({
 
   if (!RESCHEDULABLE_BOOKING_STATUSES.has(booking.status)) {
     throw new AppError({
-      category: ERROR_CATEGORY.FAILED_PRECONDITION,
+      category: ERROR_CATEGORY.CONFLICT,
       code: 'booking/reschedule-not-allowed',
       message: `Booking berstatus "${booking.status}" tidak dapat di-reschedule.`,
     });
