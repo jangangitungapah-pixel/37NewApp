@@ -1,0 +1,230 @@
+HANDOFF — 37NewApp
+PHASE 11 FINAL VALIDATION & CLOSEOUT
+BOOKING & SESSION END-TO-END INTEGRATION ASSURANCE
+
+IMPLEMENTATION OWNER: CHATGPT THROUGH CONNECTED GITHUB TOOLS
+LOCAL VERIFICATION OWNER: USER (WINDOWS POWERSHELL)
+STATUS: CODE COMMITTED; LOCAL VERIFICATION PENDING
+PREPARED: 17 NOVEMBER 2026 (ASIA/JAKARTA)
+
+============================================================
+0. PURPOSE — CONTINUE PHASE 11 ONLY
+============================================================
+
+This handoff continues the existing Phase 11. It is NOT permission to begin Phase 12.
+
+The purpose of the next session is to:
+1. Inspect the exact latest branch/PR state.
+2. Review the user's local Phase 11 verification log.
+3. Diagnose and repair only reproducible failures.
+4. Re-run the local verification after any necessary fix.
+5. Update the Phase 11 checkpoint and PR description with actual evidence.
+6. Close Phase 11 only when the acceptance criteria supported by the local log are met.
+
+Do not ask the user to use Antigravity. ChatGPT owns GitHub implementation. The user runs local PowerShell verification and uploads the generated .txt evidence.
+
+============================================================
+1. REPOSITORY BASELINE
+============================================================
+
+Repository:
+https://github.com/jangangitungapah-pixel/37NewApp
+
+Local path:
+C:\Users\hazel\source\repos\37NewApp
+
+Branch:
+feature/phase-10-booking-session-lifecycle
+
+PR:
+https://github.com/jangangitungapah-pixel/37NewApp/pull/1
+
+Implementation commit:
+567d5946e3aa849db3ddea2a2d4475bfef1662d3
+
+This handoff/checkpoint deliverable commit may advance the branch head after this prompt is committed. Always re-fetch PR metadata, branch HEAD and current file versions before editing. Do not assume the implementation SHA above remains the latest HEAD.
+
+PR must remain:
+- OPEN
+- DRAFT
+- NOT MERGED
+
+Never merge PR #1 without the user's explicit permission. Do not deploy or publish Hosting.
+
+============================================================
+2. WHAT PHASE 11 IMPLEMENTED
+============================================================
+
+The demonstrated integration mismatch was:
+
+- Legacy booking record: status = IN_PROGRESS.
+- The sessionStatus field may be absent.
+- A real actualStartAt must exist.
+- Existing domain/UI logic resolves the legacy session as IN_PROGRESS and shows Complete only when actualStartAt is present.
+- Firestore Rules previously accepted completion only when the previous booking status was CONFIRMED.
+- This caused a legitimate legacy completion to pass UI/domain validation but fail at the Rules boundary.
+
+Repair committed:
+- firestore.rules allows only action == complete when oldData.status == IN_PROGRESS as the legacy exception.
+- The active member, booking permission, assigned studio authorization, operation marker, matching append-only session event, actualStartAt, actualEndAt timestamp, duration and completed settlement-pending result checks remain required.
+- Check-in, start and No-Show for the normal new lifecycle remain CONFIRMED-only.
+- Cancellation rules are unchanged.
+- Completing a session does not release held booking slots.
+
+New regression and integration tests:
+- tests/rules/phase03.rules.test.js: legacy IN_PROGRESS completion and held-slot preservation.
+- tests/unit/BookingDetailModal.test.jsx: Complete visibility only with actualStartAt, UI success callback, Finance handoff label, and offline disabled state.
+- tests/unit/bookingSessionUseCases.test.js: Operator permission/assignment denial, Operator-to-Owner Finance notification, Owner-to-Operator notification, notification failure after primary commit, and no notification after failed primary transaction.
+
+Verifier updated:
+- Existing script reused: verify-phase10-booking-rules.ps1.
+- Targeted unit file list now includes:
+  - tests/unit/bookingSessionLifecycle.test.js
+  - tests/unit/bookingSlotAndValidator.test.js
+  - tests/unit/bookingSessionUseCases.test.js
+  - tests/unit/BookingDetailModal.test.jsx
+- Generated log destination:
+  logs\phase11-verification-YYYYMMDD-HHMMSS.txt
+- It writes stdout, stderr and process exit code for each stage.
+- Existing ignored logs directory is used; do not commit generated local logs.
+
+IMPORTANT: The new Phase 11 tests and updated verifier have NOT YET BEEN RUN LOCALLY. Do not say they passed.
+
+============================================================
+3. USER LOCAL VERIFICATION PROCEDURE
+============================================================
+
+From PowerShell:
+
+Set-Location 'C:\Users\hazel\source\repos\37NewApp'
+
+First inspect local state:
+
+git status --short --branch
+git branch --show-current
+git fetch origin
+
+Expected branch:
+feature/phase-10-booking-session-lifecycle
+
+Before pulling, confirm the working tree is clean. If git status reports local modifications or untracked work that the user needs, STOP and preserve it; do not reset, stash, clean or overwrite anything.
+
+When the local branch is the expected branch and the working tree is clean, fast-forward only:
+
+git pull --ff-only origin feature/phase-10-booking-session-lifecycle
+
+Then confirm:
+
+git rev-parse HEAD
+
+The resulting HEAD must contain the Phase 11 code and checkpoint/handoff commits. Do not use reset --hard, force-pull or any destructive cleanup.
+
+Run the complete local verifier:
+
+powershell -NoProfile -ExecutionPolicy Bypass -File .\verify-phase10-booking-rules.ps1
+
+Expected log pattern:
+
+logs\phase11-verification-YYYYMMDD-HHMMSS.txt
+
+Upload the newly generated log to the next ChatGPT session. Upload the actual .txt file, not just copied excerpts, so the full stdout/stderr and per-stage exit codes can be reviewed.
+
+============================================================
+4. HOW TO REVIEW THE LOG
+============================================================
+
+Inspect:
+- PowerShell parser check.
+- Branch guard.
+- Node/npm runtime.
+- ESLint.
+- All four targeted booking/session unit files.
+- Full Firestore Rules emulator suite.
+- Production build.
+- Final Git status and HEAD.
+- Every recorded stage exit code and overall result.
+
+A stage must be treated as failed if it has a non-zero process exit code or the test runner reports failed tests, even if a later step happens to complete.
+
+Firestore Rules tests intentionally issue denied requests as negative assertions. PERMISSION_DENIED lines in stderr are not automatically failures: correlate them with the associated test name, expected assertion and final Vitest result. Conversely, do not ignore a genuine unexpected denial or Rules evaluation-limit error merely because the overall suite passes.
+
+The prior Phase 10 baseline at code commit 1822a231278d1607b3b4cf0a769eea3cf0889c4f recorded:
+- ESLint PASS.
+- Targeted booking/session tests 24/24 PASS.
+- Firestore Rules tests 23/23 PASS across 7 files.
+- Production build PASS.
+- Verification wrapper all stages exit code 0.
+
+That prior log predates Phase 11 changes. It is not Phase 11 verification.
+
+============================================================
+5. ACCEPTANCE CRITERIA FOR PHASE 11 CLOSEOUT
+============================================================
+
+Close Phase 11 only after the local evidence proves:
+1. Legacy IN_PROGRESS session with real actualStartAt can complete through UI -> use case -> transaction -> Firestore Rules.
+2. Legacy record without actualStartAt does not expose a fabricated completion path.
+3. Normal new flow keeps check-in, start and complete separate.
+4. Complete leads to COMPLETED_PENDING_SETTLEMENT and preserves Finance handoff.
+5. Complete does not release booking slot locks.
+6. Cancel-after-start retains actualStartAt and does not fabricate actualEndAt.
+7. No-Show remains blocked before the 15-minute grace and accepted after it with a valid reason.
+8. Cancel/reject/no-show release only slots owned by that booking, atomically.
+9. Owner and Operator role/assigned-studio boundaries remain intact.
+10. Operation markers and append-only session event behavior remain intact.
+11. Post-commit notification failure does not reverse or reject a successful primary transaction.
+12. Full Rules suite, targeted unit tests, ESLint and production build pass.
+13. The verification log captures stdout, stderr and process exit code per stage.
+14. PR body accurately reports actual verification status.
+15. PR remains OPEN and DRAFT; no merge, deploy, Hosting publish or production data writes occur.
+16. docs/checkpoints/phase-11-checkpoint.md records actual results, including residual risks.
+
+If any test fails, inspect its actual failure and fix only the demonstrated issue. Add a new verification run after a fix. Do not modify expected assertions simply to make the current implementation pass.
+
+============================================================
+6. ARCHITECTURE AND SECURITY CONSTRAINTS
+============================================================
+
+Keep:
+- Firebase Authentication.
+- Cloud Firestore.
+- Firebase Hosting.
+- Firebase Spark only.
+- Cloudinary unsigned uploads for Gallery image binaries only; Gallery metadata in Firestore.
+
+Strictly exclude:
+- Cloud Functions.
+- Cloud Run.
+- Cloudflare Workers.
+- Any other backend/request-path service.
+- Firebase Storage.
+- Firebase Extensions.
+- Blaze, Cloud Billing, payment method, paid infrastructure or paid dependencies.
+- Production data writes, deploy or Hosting publish.
+
+ADR-0010 Option A accepted risk MUST remain documented:
+An otherwise-authorized Owner/Operator may issue direct Firestore writes outside the official repository and omit a complete slot set. Do not claim booking-slot integrity is server-authoritative, tamper-proof or guaranteed against malicious direct writes from an authorized member.
+
+Do not weaken normal authorization, assigned-studio checks, operation marker checks or atomic repository flows.
+
+============================================================
+7. REQUIRED NEXT-SESSION BEHAVIOR
+============================================================
+
+Before changes:
+1. Re-fetch PR #1 state, draft status, base and head.
+2. Re-fetch latest branch HEAD.
+3. Read latest versions of every file to be edited.
+4. Inspect the uploaded Phase 11 verification log in full.
+5. Compare its branch/HEAD and run timestamp with current GitHub state.
+
+If branch/PR state changed materially, stop and report rather than silently rebasing or broadening scope.
+
+After verification:
+- Provide exact result matrix and any concrete failure analysis.
+- Update docs/checkpoints/phase-11-checkpoint.md with actual results.
+- Update PR #1 description with actual Phase 11 status, keeping OPEN + DRAFT.
+- If a follow-on handoff is needed, it must only cover Phase 11 closeout still outstanding; do not start Phase 12 in the same session.
+- Never claim tests ran locally unless their output is in the user-uploaded log.
+
+END OF PHASE 11 FINAL VALIDATION & CLOSEOUT HANDOFF

@@ -81,6 +81,41 @@ export const BOOKING_STATUS = Object.freeze({
   SETTLED: 'SETTLED',
   CANCELLED: 'CANCELLED',
   NO_SHOW: 'NO_SHOW',
+  REJECTED: 'REJECTED',
+});
+
+export const SESSION_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  UPCOMING: 'UPCOMING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  NO_SHOW: 'NO_SHOW',
+  CANCELLED: 'CANCELLED',
+});
+
+export const SESSION_ACTION = Object.freeze({
+  CHECK_IN: 'check_in',
+  START: 'start',
+  COMPLETE: 'complete',
+  NO_SHOW: 'no_show',
+  CANCEL: 'cancel',
+  REJECT: 'reject',
+});
+
+export const BOOKING_SESSION_EVENT_TYPE = Object.freeze({
+  CHECK_IN: 'check_in',
+  START: 'start',
+  COMPLETE: 'complete',
+  NO_SHOW: 'no_show',
+  CANCEL: 'cancel',
+  REJECT: 'reject',
+});
+
+export const BOOKING_OPERATION_TYPE = Object.freeze({
+  CREATE: 'booking.create',
+  DECISION: 'booking.decision',
+  RESCHEDULE: 'booking.reschedule',
+  SESSION: 'booking.session',
 });
 
 export const BLOCKING_BOOKING_STATUSES = Object.freeze([
@@ -203,6 +238,8 @@ export const SCHEMA_VERSIONS = Object.freeze({
   COMMISSION_ENTRY: 1,
   NOTIFICATION: 1,
   GALLERY_ASSET: 1,
+  BOOKING_SESSION_EVENT: 1,
+  BOOKING_OPERATION: 1,
 });
 
 export const OPERATOR_DEFAULT_PERMISSIONS = Object.freeze({

@@ -16,6 +16,8 @@ export function useRegistrySubscription(key, subscribeFn, initialData) {
     loading: Boolean(subscribeFn),
     error: null,
     fromCache: false,
+    possiblyTruncated: false,
+    metadata: {},
   }));
 
   useEffect(() => {
@@ -35,6 +37,8 @@ export function useRegistrySubscription(key, subscribeFn, initialData) {
           loading: false,
           error: null,
           fromCache: Boolean(meta?.fromCache),
+          possiblyTruncated: Boolean(meta?.possiblyTruncated),
+          metadata: meta || {},
         });
       },
       onError: (err) => {
@@ -61,6 +65,8 @@ export function useRegistrySubscription(key, subscribeFn, initialData) {
       loading: false,
       error: null,
       fromCache: false,
+      possiblyTruncated: false,
+      metadata: {},
     };
   }
 

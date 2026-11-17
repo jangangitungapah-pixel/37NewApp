@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { CalendarPlus, Lock, UserPlus, WifiOff } from 'lucide-react';
 import {
   listCustomersPageUseCase,
@@ -23,10 +25,25 @@ import {
   computeBookingSlotPlan,
   getTodayDateKey,
 } from '../../domain/calculations/slotGenerator.js';
-import { ModalDialog } from '../../shared/components/ModalDialog.jsx';
+import { DialogModal } from '../../components/ui/DialogModal.jsx';
+import { Button } from '../../components/ui/Button.jsx';
+import { Input } from '../../components/ui/Input.jsx';
+import { SelectField } from '../../components/ui/SelectField.jsx';
+import { Textarea } from '../../components/ui/Textarea.jsx';
+import { FormField } from '../../components/forms/FormField.jsx';
+import { createZodFormConfig, extractFieldErrorMessage } from '../../lib/validation/formHelpers.js';
 import { StatusAlert } from '../../shared/components/StatusFeedback.jsx';
 import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscription.js';
 import { formatIdr, formatOperatingHours } from '../../shared/utils/formatters.js';
+
+const bookingCreateSchema = z.object({
+  dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal booking wajib valid.'),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Jam mulai wajib valid.'),
+  durationMinutes: z.coerce.number().int().min(15, 'Durasi minimal 15 menit.').max(720, 'Durasi maksimal 12 jam.'),
+  customerId: z.string().min(1, 'Customer wajib dipilih.'),
+  discountMinor: z.coerce.number().int().min(0, 'Diskon tidak boleh negatif.'),
+  notes: z.string().max(500, 'Catatan maksimal 500 karakter.'),
+});
 
 export function CreateBookingModal({
   onClose,
@@ -66,8 +83,6 @@ export function CreateBookingModal({
   );
 
   const tz = selectedStudio?.timezone || business?.timezone || 'Asia/Jakarta';
-  const [dateKey, setDateKey] = useState(() => prefillDateKey || getTodayDateKey(tz));
-
   const eligibleServices = useMemo(
     () =>
       activeServices.filter(
@@ -90,13 +105,6 @@ export function CreateBookingModal({
     () => selectedService?.durationOptions || [60],
     [selectedService],
   );
-  const [durationMinutes, setDurationMinutes] = useState(
-    () => durationOptions[0] || 60,
-  );
-  const effectiveDuration = durationOptions.includes(Number(durationMinutes))
-    ? Number(durationMinutes)
-    : durationOptions[0] || 60;
-
   const startOptions = useMemo(() => {
     if (!selectedStudio) return [];
     return buildStartTimeOptions({
@@ -106,23 +114,54 @@ export function CreateBookingModal({
     });
   }, [scheduleSetting, selectedStudio]);
 
-  const [startTime, setStartTime] = useState(
-    () => prefillStartTime || startOptions[0]?.timeHHmm || '10:00',
-  );
-  const effectiveStartTime = startOptions.some((o) => o.timeHHmm === startTime)
+  const {
+    register,
+    handleSubmit: handleFormSubmit,
+    setValue,
+    setError,
+    clearErrors,
+    watch,
+    formState: { errors: formErrors },
+  } = useForm(createZodFormConfig(bookingCreateSchema, {
+    dateKey: prefillDateKey || getTodayDateKey(tz),
+    startTime: prefillStartTime || startOptions[0]?.timeHHmm || '10:00',
+    durationMinutes: durationOptions[0] || 60,
+    customerId: '',
+    discountMinor: '0',
+    notes: '',
+  }));
+
+  const dateKey = watch('dateKey');
+  const startTime = watch('startTime');
+  const durationMinutes = watch('durationMinutes');
+  const customerId = watch('customerId');
+  const discountInput = watch('discountMinor');
+
+  const effectiveDuration = durationOptions.includes(Number(durationMinutes))
+    ? Number(durationMinutes)
+    : durationOptions[0] || 60;
+  const effectiveStartTime = startOptions.some((option) => option.timeHHmm === startTime)
     ? startTime
     : startOptions[0]?.timeHHmm || '10:00';
 
+  useEffect(() => {
+    if (durationOptions.length > 0 && !durationOptions.includes(Number(durationMinutes))) {
+      setValue('durationMinutes', durationOptions[0], { shouldValidate: true });
+    }
+  }, [durationOptions, durationMinutes, setValue]);
+
+  useEffect(() => {
+    if (startOptions.length > 0 && !startOptions.some((option) => option.timeHHmm === startTime)) {
+      setValue('startTime', startOptions[0].timeHHmm, { shouldValidate: true });
+    }
+  }, [startOptions, startTime, setValue]);
+
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(true);
-  const [customerId, setCustomerId] = useState('');
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const [quickCustName, setQuickCustName] = useState('');
   const [quickCustPhone, setQuickCustPhone] = useState('');
   const [quickCustAct, setQuickCustAct] = useState('');
-
-  const [discountInput, setDiscountInput] = useState('0');
-  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -146,7 +185,7 @@ export function CreateBookingModal({
         if (!active) return;
         setCustomers(res.items);
         if (res.items.length > 0) {
-          setCustomerId((prev) => prev || res.items[0].customerId);
+          setValue('customerId', res.items[0].customerId, { shouldValidate: true });
         }
       } catch (err) {
         if (active) setErrorMessage(err.message || 'Gagal memuat daftar customer.');
@@ -158,7 +197,7 @@ export function CreateBookingModal({
     return () => {
       active = false;
     };
-  }, [member, customerWriteAllowed]);
+  }, [member, customerWriteAllowed, setValue]);
 
   const subscribeDaySlots = useCallback(
     ({ onData, onError }) => {
@@ -268,7 +307,7 @@ export function CreateBookingModal({
         },
       });
       setCustomers((prev) => [created, ...prev]);
-      setCustomerId(created.customerId);
+      setValue('customerId', created.customerId, { shouldValidate: true, shouldDirty: true });
       setShowQuickCustomer(false);
       setQuickCustName('');
       setQuickCustPhone('');
@@ -280,13 +319,14 @@ export function CreateBookingModal({
     }
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  async function handleSubmit(values) {
     setErrorMessage('');
+    clearErrors();
 
-    const selectedCustomer = customers.find((c) => c.customerId === customerId);
+    const selectedCustomer = customers.find((c) => c.customerId === values.customerId);
     if (!selectedCustomer) {
-      setErrorMessage('Pilih customer terlebih dahulu.');
+      setError('customerId', { type: 'validate', message: 'Customer yang dipilih tidak tersedia atau sudah tidak aktif.' });
+      setErrorMessage('Customer yang dipilih tidak tersedia. Pilih ulang customer aktif.');
       return;
     }
     if (!selectedStudio || !selectedService) {
@@ -296,18 +336,18 @@ export function CreateBookingModal({
 
     setSubmitting(true);
     try {
-      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(discountInput || 0))) : 0;
+      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(values.discountMinor || 0))) : 0;
       const created = await createBookingUseCase({
         member,
         studio: selectedStudio,
         service: selectedService,
         customer: selectedCustomer,
         operatorUid: member.uid,
-        dateKey,
-        startTime: effectiveStartTime,
-        durationMinutes: effectiveDuration,
+        dateKey: values.dateKey,
+        startTime: values.startTime,
+        durationMinutes: Number(values.durationMinutes),
         discountMinor,
-        notes: notes.trim() || null,
+        notes: values.notes.trim() || null,
         scheduleSetting,
         pricingSetting,
         commissionSetting,
@@ -324,14 +364,20 @@ export function CreateBookingModal({
     }
   }
 
+  const submitBooking = handleFormSubmit(handleSubmit);
+
   return (
-    <ModalDialog
+    <DialogModal
       open
-      onClose={onClose}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !submitting) onClose();
+      }}
+      size="xl"
       title="Buat Booking Studio Baru"
-      subtitle={`Reservasi atomik per bucket 15 menit (${tz}) dengan price & commission snapshot.`}
+      description={`Reservasi slot 15 menit (${tz}) dengan price dan commission snapshot.`}
+      className="max-h-[min(92vh,900px)] overflow-y-auto"
     >
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
+      <form onSubmit={submitBooking} className="grid gap-4">
         {!isOnline && (
           <StatusAlert
             variant="danger"
@@ -356,206 +402,186 @@ export function CreateBookingModal({
           />
         ) : (
           <>
-            <div className="grid-2">
-              <div className="field">
-                <label className="field-label" htmlFor="bk-studio">
-                  Studio / Room
-                </label>
-                <select
-                  id="bk-studio"
-                  className="field-input"
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Studio / Room" required>
+                <SelectField
                   value={selectedStudio?.studioId || ''}
-                  onChange={(e) => setStudioId(e.target.value)}
-                >
-                  {activeStudios.map((studio) => (
-                    <option key={studio.studioId} value={studio.studioId}>
-                      {studio.name} ({formatOperatingHours(studio.operatingHours)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field">
-                <label className="field-label" htmlFor="bk-date">
-                  Tanggal Sesi ({tz})
-                </label>
-                <input
-                  id="bk-date"
-                  type="date"
-                  className="field-input"
-                  value={dateKey}
-                  onChange={(e) => setDateKey(e.target.value)}
-                  required
+                  onValueChange={setStudioId}
+                  options={activeStudios.map((studio) => ({
+                    value: studio.studioId,
+                    label: `${studio.name} · ${formatOperatingHours(studio.operatingHours)}`,
+                  }))}
+                  placeholder="Pilih studio"
                 />
-              </div>
-            </div>
+              </FormField>
 
-            <div className="grid-2">
-              <div className="field">
-                <label className="field-label" htmlFor="bk-service">
-                  Layanan Studio
-                </label>
-                <select
-                  id="bk-service"
-                  className="field-input"
-                  value={selectedService?.serviceId || ''}
-                  onChange={(e) => setServiceId(e.target.value)}
-                >
-                  {eligibleServices.map((svc) => (
-                    <option key={svc.serviceId} value={svc.serviceId}>
-                      {svc.name} · {formatIdr(svc.basePriceMinor)} (v{svc.configVersion})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field">
-                <label className="field-label" htmlFor="bk-duration">
-                  Durasi
-                </label>
-                <select
-                  id="bk-duration"
-                  className="field-input"
-                  value={effectiveDuration}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                >
-                  {durationOptions.map((dur) => (
-                    <option key={dur} value={dur}>
-                      {dur} menit
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="bk-start-time">
-                Jam Mulai (slot bertanda [Terisi] sedang terkunci)
-              </label>
-              <select
-                id="bk-start-time"
-                className="field-input"
-                value={effectiveStartTime}
-                onChange={(e) => setStartTime(e.target.value)}
+              <FormField
+                label={`Tanggal Sesi (${tz})`}
+                required
+                error={extractFieldErrorMessage(formErrors, 'dateKey')}
               >
-                {startOptions.map((opt) => {
-                  const startLocked = occupiedBucketSet.has(opt.bucketIndex);
-                  return (
-                    <option key={opt.timeHHmm} value={opt.timeHHmm}>
-                      {opt.timeHHmm} WIB {startLocked ? '— [Terisi]' : ''}
-                    </option>
-                  );
-                })}
-              </select>
+                <Input type="date" {...register('dateKey')} />
+              </FormField>
             </div>
 
-            <div className="field">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="field-label" htmlFor="bk-customer">
-                  Customer / Band
-                </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Layanan Studio" required>
+                <SelectField
+                  value={selectedService?.serviceId || ''}
+                  onValueChange={setServiceId}
+                  options={eligibleServices.map((service) => ({
+                    value: service.serviceId,
+                    label: `${service.name} · ${formatIdr(service.basePriceMinor)} (v${service.configVersion})`,
+                  }))}
+                  placeholder="Pilih layanan"
+                />
+              </FormField>
+
+              <FormField
+                label="Durasi"
+                required
+                error={extractFieldErrorMessage(formErrors, 'durationMinutes')}
+              >
+                <SelectField
+                  value={effectiveDuration}
+                  onValueChange={(value) => setValue('durationMinutes', value, { shouldValidate: true, shouldDirty: true })}
+                  options={durationOptions.map((duration) => ({
+                    value: duration,
+                    label: `${duration} menit`,
+                  }))}
+                  placeholder="Pilih durasi"
+                />
+              </FormField>
+            </div>
+
+            <FormField
+              label="Jam Mulai"
+              required
+              hint="Waktu mengikuti timezone studio. Slot bertanda [Terisi] sudah memiliki lock aktif."
+              error={extractFieldErrorMessage(formErrors, 'startTime')}
+            >
+              <SelectField
+                value={effectiveStartTime}
+                onValueChange={(value) => setValue('startTime', value, { shouldValidate: true, shouldDirty: true })}
+                options={startOptions.map((option) => {
+                  const startLocked = occupiedBucketSet.has(option.bucketIndex);
+                  return {
+                    value: option.timeHHmm,
+                    label: `${option.timeHHmm} · ${startLocked ? '[Terisi]' : 'Tersedia'}`,
+                    disabled: startLocked,
+                  };
+                })}
+                placeholder="Pilih jam mulai"
+              />
+            </FormField>
+
+            <section className="grid gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-foreground">Customer / Band</span>
                 {customerWriteAllowed && (
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-sm"
-                    onClick={() => setShowQuickCustomer((prev) => !prev)}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowQuickCustomer((previous) => !previous)}
                   >
-                    <UserPlus size={13} aria-hidden="true" />
-                    <span>{showQuickCustomer ? 'Batal Tambah' : 'Customer Baru Cepat'}</span>
-                  </button>
+                    <UserPlus size={14} aria-hidden="true" />
+                    {showQuickCustomer ? 'Tutup Form Customer' : 'Customer Baru Cepat'}
+                  </Button>
                 )}
               </div>
 
               {showQuickCustomer ? (
-                <div
-                  className="panel"
-                  style={{ padding: '12px', display: 'grid', gap: '10px', background: 'var(--bg-input)' }}
-                >
-                  <div className="grid-2">
-                    <input
-                      className="field-input"
-                      placeholder="Nama lengkap customer"
-                      value={quickCustName}
-                      onChange={(e) => setQuickCustName(e.target.value)}
-                    />
-                    <input
-                      className="field-input"
-                      placeholder="No. Telepon / WhatsApp"
-                      value={quickCustPhone}
-                      onChange={(e) => setQuickCustPhone(e.target.value)}
-                    />
+                <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FormField label="Nama Customer" required>
+                      <Input
+                        value={quickCustName}
+                        onChange={(event) => setQuickCustName(event.target.value)}
+                        placeholder="Nama lengkap customer"
+                        autoComplete="name"
+                      />
+                    </FormField>
+                    <FormField label="Nomor Telepon / WhatsApp" required>
+                      <Input
+                        value={quickCustPhone}
+                        onChange={(event) => setQuickCustPhone(event.target.value)}
+                        placeholder="08xxxxxxxxxx"
+                        inputMode="tel"
+                        autoComplete="tel"
+                      />
+                    </FormField>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      className="field-input"
-                      placeholder="Nama Band / Act (opsional)"
+                  <FormField label="Nama Band / Act (opsional)">
+                    <Input
                       value={quickCustAct}
-                      onChange={(e) => setQuickCustAct(e.target.value)}
+                      onChange={(event) => setQuickCustAct(event.target.value)}
+                      placeholder="Nama band atau act"
                     />
-                    <button
+                  </FormField>
+                  <div className="flex justify-end">
+                    <Button
                       type="button"
-                      className="btn btn-primary btn-sm"
+                      variant="secondary"
+                      size="sm"
+                      loading={submitting}
+                      disabled={!isOnline || !quickCustName.trim() || !quickCustPhone.trim()}
                       onClick={handleQuickCustomerSave}
-                      disabled={submitting || !isOnline}
                     >
                       Simpan Customer
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
-                <select
-                  id="bk-customer"
-                  className="field-input"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  disabled={customersLoading}
+                <FormField
+                  label="Pilih Customer Aktif"
+                  required
+                  error={extractFieldErrorMessage(formErrors, 'customerId')}
                 >
-                  {customersLoading ? (
-                    <option value="">Memuat customer...</option>
-                  ) : customers.length === 0 ? (
-                    <option value="">Belum ada customer aktif</option>
-                  ) : (
-                    customers.map((c) => (
-                      <option key={c.customerId} value={c.customerId}>
-                        {c.name}
-                        {c.bandOrActName ? ` (${c.bandOrActName})` : ''} · {c.phone}
-                      </option>
-                    ))
-                  )}
-                </select>
+                  <SelectField
+                    value={customerId}
+                    onValueChange={(value) => setValue('customerId', value, { shouldValidate: true, shouldDirty: true })}
+                    disabled={customersLoading || customers.length === 0}
+                    options={customers.map((customer) => ({
+                      value: customer.customerId,
+                      label: `${customer.name}${customer.bandOrActName ? ` (${customer.bandOrActName})` : ''} · ${customer.phone}`,
+                    }))}
+                    placeholder={customersLoading ? 'Memuat customer...' : 'Pilih customer'}
+                  />
+                </FormField>
               )}
-            </div>
+            </section>
 
-            <div className="grid-2">
-              <div className="field">
-                <label className="field-label" htmlFor="bk-discount">
-                  Diskon (IDR) {discountAllowed ? '' : '— Terkunci Policy'}
-                </label>
-                <input
-                  id="bk-discount"
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                label={`Diskon (IDR)${discountAllowed ? '' : ' — Terkunci Policy'}`}
+                error={extractFieldErrorMessage(formErrors, 'discountMinor')}
+                hint="Gunakan nilai rupiah bulat. Diskon tetap divalidasi ulang oleh domain policy."
+              >
+                <Input
                   type="number"
-                  min={0}
-                  step={1000}
-                  className="field-input"
-                  value={discountAllowed ? discountInput : '0'}
-                  onChange={(e) => setDiscountInput(e.target.value)}
+                  min="0"
+                  step="1000"
                   disabled={!discountAllowed}
+                  {...register('discountMinor')}
+                  onChange={(event) => {
+                    if (!discountAllowed) return;
+                    setValue('discountMinor', event.target.value, { shouldValidate: true, shouldDirty: true });
+                  }}
                 />
-              </div>
+              </FormField>
 
-              <div className="field">
-                <label className="field-label" htmlFor="bk-notes">
-                  Catatan Sesi (opsional)
-                </label>
-                <input
-                  id="bk-notes"
-                  className="field-input"
-                  placeholder="Kebutuhan mic, ampli, shift, dll."
+              <FormField
+                label="Catatan Sesi (opsional)"
+                error={extractFieldErrorMessage(formErrors, 'notes')}
+              >
+                <Textarea
+                  rows={2}
                   maxLength={500}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Kebutuhan mic, ampli, shift, dan lainnya"
+                  {...register('notes')}
                 />
-              </div>
+              </FormField>
             </div>
 
             <div
@@ -572,7 +598,7 @@ export function CreateBookingModal({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ fontSize: '14px' }}>
                       Ringkasan Slot & Tarif ({previewQuote.slotPlan.startTime}–
-                      {previewQuote.slotPlan.endTime} WIB)
+                      {previewQuote.slotPlan.endTime} ({tz}))
                     </strong>
                     <span className="badge badge-info">
                       <Lock size={12} aria-hidden="true" />
@@ -609,37 +635,39 @@ export function CreateBookingModal({
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
-              <button type="button" className="btn" onClick={onClose} disabled={submitting}>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                onClick={onClose}
+              >
                 Tutup
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="btn btn-primary"
-                disabled={submitting || !isOnline || !previewQuote.valid || !customerId}
+                variant="primary"
+                loading={submitting}
+                disabled={!isOnline || !previewQuote.valid || !customerId || !selectedStudio || !selectedService}
               >
                 {!isOnline ? (
                   <>
                     <WifiOff size={15} aria-hidden="true" />
-                    <span>Offline</span>
+                    Offline
                   </>
                 ) : (
                   <>
                     <CalendarPlus size={15} aria-hidden="true" />
-                    <span>
-                      {submitting
-                        ? 'Mengunci Slot & Menyimpan...'
-                        : bookingPolicySetting?.defaultInitialStatus === 'PENDING_CONFIRMATION'
-                          ? 'Ajukan Booking'
-                          : 'Konfirmasi Booking'}
-                    </span>
+                    {bookingPolicySetting?.defaultInitialStatus === 'PENDING_CONFIRMATION'
+                      ? 'Ajukan Booking'
+                      : 'Konfirmasi Booking'}
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </>
         )}
       </form>
-    </ModalDialog>
+    </DialogModal>
   );
 }

@@ -16,6 +16,8 @@ export function SelectField({
   id,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }) {
   const labelMap = new Map(options.map((opt) => [String(opt.value), opt.label]));
 
@@ -30,6 +32,8 @@ export function SelectField({
         id={id}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         className={cn(
           'inline-flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-input bg-background px-3.5 text-sm text-foreground shadow-2xs transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer',
           className

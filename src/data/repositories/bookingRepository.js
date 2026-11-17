@@ -13,10 +13,12 @@ import {
 import {
   ACTIVITY_ENTITY_TYPE,
   ACTIVITY_EVENT_TYPE,
+  BOOKING_OPERATION_TYPE,
   BOOKING_SLOT_STATUS,
   BOOKING_STATUS,
   ROLES,
   SCHEMA_VERSIONS,
+  SESSION_STATUS,
 } from '../../domain/enums/roles.js';
 import {
   assertValidBookingTransition,
@@ -41,6 +43,71 @@ function chunkArray(items, chunkSize) {
 
 function createPreGeneratedBookingRef(db, businessId) {
   return doc(collection(db, 'businesses', businessId, 'bookings'));
+}
+
+function bookingOperationRef(db, businessId, operationId) {
+  return doc(db, 'businesses', businessId, 'bookingOperations', operationId);
+}
+
+function assertBookingOperationReplay(marker, expected) {
+  const matches =
+    marker.businessId === expected.businessId &&
+    marker.bookingId === expected.bookingId &&
+    marker.studioId === expected.studioId &&
+    marker.operationType === expected.operationType &&
+    marker.action === expected.action &&
+    marker.actorUid === expected.actorUid &&
+    marker.actorRole === expected.actorRole &&
+    marker.requestId === expected.operationContext.requestId &&
+    marker.payloadHash === expected.operationContext.payloadHash;
+
+  if (!matches) {
+    throw new AppError({
+      category: ERROR_CATEGORY.CONFLICT,
+      code: 'booking/idempotency-conflict',
+      message: 'Request ID sudah digunakan untuk aksi atau data booking yang berbeda. Muat ulang aksi dan coba lagi.',
+    });
+  }
+}
+
+function assertOperationContext(operationContext) {
+  if (!operationContext?.operationId || !operationContext?.requestId || !operationContext?.payloadHash) {
+    throw new AppError({
+      category: ERROR_CATEGORY.VALIDATION,
+      code: 'booking/idempotency-context-required',
+      message: 'Konteks idempotensi booking tidak lengkap. Silakan mulai ulang aksi dari aplikasi.',
+    });
+  }
+}
+
+function buildBookingOperationMarker({
+  operationContext,
+  operationType,
+  action,
+  businessId,
+  bookingId,
+  studioId,
+  actorUid,
+  actorRole,
+  resultBookingStatus,
+  resultSessionStatus,
+}) {
+  return {
+    operationId: operationContext.operationId,
+    requestId: operationContext.requestId,
+    payloadHash: operationContext.payloadHash,
+    operationType,
+    action,
+    businessId,
+    bookingId,
+    studioId,
+    actorUid,
+    actorRole,
+    resultBookingStatus,
+    resultSessionStatus: resultSessionStatus || null,
+    schemaVersion: SCHEMA_VERSIONS.BOOKING_OPERATION,
+    createdAt: serverTimestamp(),
+  };
 }
 
 export function generateNewBookingId(businessId) {
@@ -87,7 +154,12 @@ export function subscribeBookingsInRange({
       (snap) => {
         try {
           const items = snap.docs.map(mapBookingSnapshot).filter(Boolean);
-          onData(items, { fromCache: snap.metadata.fromCache });
+          onData(items, {
+            fromCache: snap.metadata.fromCache,
+            possiblyTruncated: snap.size >= 150,
+            limit: 150,
+            returned: snap.size,
+          });
         } catch (err) {
           onError(mapFirebaseError(err));
         }
@@ -110,7 +182,12 @@ export function subscribeBookingsInRange({
       (snap) => {
         try {
           const items = snap.docs.map(mapBookingSnapshot).filter(Boolean);
-          onData(items, { fromCache: snap.metadata.fromCache });
+          onData(items, {
+            fromCache: snap.metadata.fromCache,
+            possiblyTruncated: snap.size >= 150,
+            limit: 150,
+            returned: snap.size,
+          });
         } catch (err) {
           onError(mapFirebaseError(err));
         }
@@ -121,7 +198,8 @@ export function subscribeBookingsInRange({
 
   const chunks = chunkArray(assignedIds, 10);
   const chunkMap = new Map();
-  let anyFromCache = false;
+  const chunkCacheMap = new Map();
+  const chunkTruncationMap = new Map();
 
   const emitMerged = () => {
     const deduped = new Map();
@@ -136,7 +214,14 @@ export function subscribeBookingsInRange({
       }
       return (a.startAt?.getTime?.() || 0) - (b.startAt?.getTime?.() || 0);
     });
-    onData(sorted, { fromCache: anyFromCache });
+    const truncatedChunks = Array.from(chunkTruncationMap.values()).filter(Boolean).length;
+    onData(sorted, {
+      fromCache: Array.from(chunkCacheMap.values()).some(Boolean),
+      possiblyTruncated: truncatedChunks > 0,
+      truncatedChunks,
+      chunkCount: chunks.length,
+      limitPerChunk: 100,
+    });
   };
 
   const unsubs = chunks.map((chunkIds, idx) => {
@@ -153,7 +238,8 @@ export function subscribeBookingsInRange({
       q,
       (snap) => {
         try {
-          anyFromCache = snap.metadata.fromCache;
+          chunkCacheMap.set(idx, snap.metadata.fromCache);
+          chunkTruncationMap.set(idx, snap.size >= 100);
           chunkMap.set(idx, snap.docs.map(mapBookingSnapshot).filter(Boolean));
           emitMerged();
         } catch (err) {
@@ -277,7 +363,9 @@ export async function createBookingTransaction({
   slotPlan,
   actorUid,
   actorRole,
+  operationContext,
 }) {
+  assertOperationContext(operationContext);
   try {
     const { db } = getFirebaseServices();
     const bookingRef = doc(db, 'businesses', businessId, 'bookings', booking.bookingId);
@@ -286,20 +374,44 @@ export async function createBookingTransaction({
     );
     const eventId = `${ACTIVITY_EVENT_TYPE.BOOKING_CREATED}__${booking.bookingId}`;
     const activityRef = doc(db, 'businesses', businessId, 'activityLogs', eventId);
+    const operationRef = bookingOperationRef(db, businessId, operationContext.operationId);
 
-    await runTransaction(db, async (tx) => {
-      // 1. ALL reads first (required by Firestore transactions)
-      const existingBookingSnap = await tx.get(bookingRef);
-      const slotSnaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+    const committedBooking = await runTransaction(db, async (tx) => {
+      // 1. Read operation marker, booking, and every deterministic slot before writes.
+      const [operationSnap, existingBookingSnap] = await Promise.all([
+        tx.get(operationRef),
+        tx.get(bookingRef),
+      ]);
+      if (operationSnap.exists()) {
+        assertBookingOperationReplay(operationSnap.data(), {
+          operationContext,
+          businessId,
+          bookingId: booking.bookingId,
+          studioId: booking.studioId,
+          actorUid,
+          actorRole,
+          operationType: BOOKING_OPERATION_TYPE.CREATE,
+          action: 'create',
+        });
+        if (!existingBookingSnap.exists()) {
+          throw new AppError({
+            category: ERROR_CATEGORY.CONFLICT,
+            code: 'booking/idempotency-result-missing',
+            message: 'Marker booking ditemukan tetapi dokumen booking tidak tersedia. Perlu pemeriksaan data.',
+          });
+        }
+        return mapBookingSnapshot(existingBookingSnap);
+      }
 
-      // 2. Pure conflict & idempotency verification
       if (existingBookingSnap.exists()) {
         throw new AppError({
           category: ERROR_CATEGORY.CONFLICT,
           code: 'booking/duplicate-id',
-          message: 'ID booking sudah ada. Muat ulang halaman dan coba lagi.',
+          message: 'ID booking sudah ada tanpa marker operasi yang cocok. Perlu pemeriksaan data.',
         });
       }
+
+      const slotSnaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
 
       const conflicts = [];
       for (let i = 0; i < slotSnaps.length; i += 1) {
@@ -320,6 +432,9 @@ export async function createBookingTransaction({
       // 3. Atomic writes
       tx.set(bookingRef, {
         ...booking,
+        lastOperationId: operationContext.operationId,
+        lastOperationType: BOOKING_OPERATION_TYPE.CREATE,
+        lastOperationPayloadHash: operationContext.payloadHash,
         startAt: Timestamp.fromDate(slotPlan.startAt),
         endAt: Timestamp.fromDate(slotPlan.endAt),
         createdAt: serverTimestamp(),
@@ -382,9 +497,23 @@ export async function createBookingTransaction({
         schemaVersion: SCHEMA_VERSIONS.ACTIVITY_LOG,
         createdAt: serverTimestamp(),
       });
+      tx.set(operationRef, buildBookingOperationMarker({
+        operationContext,
+        operationType: BOOKING_OPERATION_TYPE.CREATE,
+        action: 'create',
+        businessId,
+        bookingId: booking.bookingId,
+        studioId: booking.studioId,
+        actorUid,
+        actorRole,
+        resultBookingStatus: booking.status,
+        resultSessionStatus: booking.sessionStatus,
+      }));
+
+      return booking;
     });
 
-    return booking;
+    return committedBooking || booking;
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -404,15 +533,21 @@ export async function transitionBookingStatusTransaction({
   reason = null,
   actorUid,
   actorRole,
+  operationContext,
 }) {
+  assertOperationContext(operationContext);
   try {
     const { db } = getFirebaseServices();
     const bookingRef = doc(db, 'businesses', businessId, 'bookings', bookingId);
     const shouldReleaseSlots = RELEASING_BOOKING_STATUSES.has(targetStatus);
     const eventType = mapStatusToActivityEventType(targetStatus);
 
+    const operationRef = bookingOperationRef(db, businessId, operationContext.operationId);
     return await runTransaction(db, async (tx) => {
-      const bookingSnap = await tx.get(bookingRef);
+      const [operationSnap, bookingSnap] = await Promise.all([
+        tx.get(operationRef),
+        tx.get(bookingRef),
+      ]);
       if (!bookingSnap.exists()) {
         throw new AppError({
           category: ERROR_CATEGORY.NOT_FOUND,
@@ -422,6 +557,19 @@ export async function transitionBookingStatusTransaction({
       }
 
       const currentBooking = mapBookingSnapshot(bookingSnap);
+      if (operationSnap.exists()) {
+        assertBookingOperationReplay(operationSnap.data(), {
+          operationContext,
+          businessId,
+          bookingId,
+          studioId: currentBooking.studioId,
+          actorUid,
+          actorRole,
+          operationType: BOOKING_OPERATION_TYPE.DECISION,
+          action: `decision:${targetStatus}`,
+        });
+        return currentBooking;
+      }
       assertValidBookingTransition(currentBooking.status, targetStatus);
 
       const slotRefs = shouldReleaseSlots
@@ -431,13 +579,26 @@ export async function transitionBookingStatusTransaction({
         : [];
       const slotSnaps = slotRefs.length > 0 ? await Promise.all(slotRefs.map((ref) => tx.get(ref))) : [];
 
+      const sessionStatusByBookingStatus = {
+        [BOOKING_STATUS.CONFIRMED]: SESSION_STATUS.UPCOMING,
+        [BOOKING_STATUS.IN_PROGRESS]: SESSION_STATUS.IN_PROGRESS,
+        [BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT]: SESSION_STATUS.COMPLETED,
+        [BOOKING_STATUS.CANCELLED]: SESSION_STATUS.CANCELLED,
+        [BOOKING_STATUS.NO_SHOW]: SESSION_STATUS.NO_SHOW,
+        [BOOKING_STATUS.REJECTED]: SESSION_STATUS.CANCELLED,
+      };
       const bookingUpdate = {
         status: targetStatus,
+        sessionStatus: sessionStatusByBookingStatus[targetStatus] || currentBooking.sessionStatus,
+        lastOperationId: operationContext.operationId,
+        lastOperationType: BOOKING_OPERATION_TYPE.DECISION,
+        lastOperationPayloadHash: operationContext.payloadHash,
         updatedAt: serverTimestamp(),
         updatedBy: actorUid,
       };
 
       if (targetStatus === BOOKING_STATUS.IN_PROGRESS) {
+        // Compatibility-only legacy path; new UI uses the session start action.
         bookingUpdate.checkedInAt = serverTimestamp();
       } else if (targetStatus === BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT) {
         bookingUpdate.completedAt = serverTimestamp();
@@ -487,8 +648,20 @@ export async function transitionBookingStatusTransaction({
         schemaVersion: SCHEMA_VERSIONS.ACTIVITY_LOG,
         createdAt: serverTimestamp(),
       });
+      tx.set(operationRef, buildBookingOperationMarker({
+        operationContext,
+        operationType: BOOKING_OPERATION_TYPE.DECISION,
+        action: `decision:${targetStatus}`,
+        businessId,
+        bookingId,
+        studioId: currentBooking.studioId,
+        actorUid,
+        actorRole,
+        resultBookingStatus: targetStatus,
+        resultSessionStatus: bookingUpdate.sessionStatus,
+      }));
 
-      return { ...currentBooking, status: targetStatus };
+      return { ...currentBooking, ...bookingUpdate, status: targetStatus };
     });
   } catch (error) {
     if (error instanceof AppError) {
@@ -511,13 +684,19 @@ export async function rescheduleBookingTransaction({
   reason = null,
   actorUid,
   actorRole,
+  operationContext,
 }) {
+  assertOperationContext(operationContext);
   try {
     const { db } = getFirebaseServices();
     const bookingRef = doc(db, 'businesses', businessId, 'bookings', bookingId);
+    const operationRef = bookingOperationRef(db, businessId, operationContext.operationId);
 
     return await runTransaction(db, async (tx) => {
-      const bookingSnap = await tx.get(bookingRef);
+      const [operationSnap, bookingSnap] = await Promise.all([
+        tx.get(operationRef),
+        tx.get(bookingRef),
+      ]);
       if (!bookingSnap.exists()) {
         throw new AppError({
           category: ERROR_CATEGORY.NOT_FOUND,
@@ -527,9 +706,22 @@ export async function rescheduleBookingTransaction({
       }
 
       const current = mapBookingSnapshot(bookingSnap);
+      if (operationSnap.exists()) {
+        assertBookingOperationReplay(operationSnap.data(), {
+          operationContext,
+          businessId,
+          bookingId,
+          studioId: current.studioId,
+          actorUid,
+          actorRole,
+          operationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+          action: 'reschedule',
+        });
+        return current;
+      }
       if (!RESCHEDULABLE_BOOKING_STATUSES.has(current.status)) {
         throw new AppError({
-          category: ERROR_CATEGORY.FAILED_PRECONDITION,
+          category: ERROR_CATEGORY.CONFLICT,
           code: 'booking/reschedule-not-allowed',
           message: `Booking berstatus "${current.status}" tidak dapat di-reschedule.`,
         });
@@ -572,6 +764,9 @@ export async function rescheduleBookingTransaction({
       const nextRescheduleCount = (current.rescheduleCount || 0) + 1;
 
       tx.update(bookingRef, {
+        lastOperationId: operationContext.operationId,
+        lastOperationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+        lastOperationPayloadHash: operationContext.payloadHash,
         dateKey: newSlotPlan.dateKey,
         timezone: newSlotPlan.timezone,
         startTime: newSlotPlan.startTime,
@@ -673,6 +868,18 @@ export async function rescheduleBookingTransaction({
         schemaVersion: SCHEMA_VERSIONS.ACTIVITY_LOG,
         createdAt: serverTimestamp(),
       });
+      tx.set(operationRef, buildBookingOperationMarker({
+        operationContext,
+        operationType: BOOKING_OPERATION_TYPE.RESCHEDULE,
+        action: 'reschedule',
+        businessId,
+        bookingId,
+        studioId: current.studioId,
+        actorUid,
+        actorRole,
+        resultBookingStatus: current.status,
+        resultSessionStatus: current.sessionStatus,
+      }));
 
       return {
         ...current,

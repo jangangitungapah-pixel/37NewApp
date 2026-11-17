@@ -9,6 +9,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -32,6 +33,42 @@ const OP_A_UID = 'operator-a-uid';
 const OP_RESTRICTED_UID = 'operator-restricted-uid';
 const DATE_KEY = '2026-11-20';
 
+function makeOperationContext({
+  bookingId,
+  studioId,
+  actorUid,
+  actorRole,
+  operationType,
+  action,
+  resultBookingStatus,
+  resultSessionStatus,
+}) {
+  const operationId = `${operationType.replace(/[^a-zA-Z0-9_-]/g, '_')}__${action}__${bookingId}`;
+  const requestId = `request-${action}-${bookingId}`;
+  const payloadHash = 'a'.repeat(64);
+  return {
+    operationId,
+    requestId,
+    payloadHash,
+    marker: {
+      operationId,
+      requestId,
+      payloadHash,
+      operationType,
+      action,
+      businessId: BIZ_ID,
+      bookingId,
+      studioId,
+      actorUid,
+      actorRole,
+      resultBookingStatus,
+      resultSessionStatus,
+      schemaVersion: 1,
+      createdAt: serverTimestamp(),
+    },
+  };
+}
+
 function makeBookingPayload({
   bookingId,
   studioId,
@@ -40,7 +77,20 @@ function makeBookingPayload({
   status = 'CONFIRMED',
   discountMinor = 0,
   totalMinor = 300000,
+  operationContext = null,
 }) {
+  const sessionStatus = status === 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING';
+  const op = operationContext || makeOperationContext({
+    bookingId,
+    studioId,
+    actorUid,
+    actorRole: actorUid === OWNER_UID ? 'owner' : 'operator',
+    operationType: 'booking.create',
+    action: 'create',
+    resultBookingStatus: status,
+    resultSessionStatus: sessionStatus,
+  });
+
   return {
     bookingId,
     businessId: BIZ_ID,
@@ -58,7 +108,11 @@ function makeBookingPayload({
     endAt: Timestamp.fromDate(slotPlan.endAt),
     slotIds: slotPlan.slotIds,
     status,
-    studioSnapshot: { studioId, name: studioId.toUpperCase(), code: studioId.toUpperCase() },
+    sessionStatus,
+    lastOperationId: op.operationId,
+    lastOperationType: 'booking.create',
+    lastOperationPayloadHash: op.payloadHash,
+    studioSnapshot: { studioId, name: studioId.toUpperCase(), code: studioId.toUpperCase(), timezone: 'Asia/Jakarta' },
     serviceSnapshot: { serviceId: 'svc-rehearsal', name: 'Rehearsal', configVersion: 1 },
     customerSnapshot: { customerId: 'cust-1', name: 'Band Satu', phone: '08123456789' },
     priceSnapshot: {
@@ -73,6 +127,22 @@ function makeBookingPayload({
     cancelledBy: null,
     cancelledAt: null,
     checkedInAt: null,
+    checkedInByUid: null,
+    checkedInByName: null,
+    actualStartAt: null,
+    actualStartByUid: null,
+    actualStartByName: null,
+    actualEndAt: null,
+    actualEndByUid: null,
+    actualEndByName: null,
+    actualDurationMinutes: null,
+    noShowAt: null,
+    noShowByUid: null,
+    noShowByName: null,
+    noShowReason: null,
+    lastSessionEventId: null,
+    lastSessionEventAt: null,
+    lastSessionEventType: null,
     completedAt: null,
     rescheduleCount: 0,
     schemaVersion: 1,
@@ -105,6 +175,199 @@ function makeSlotPayload({ slot, bookingId, actorUid }) {
   };
 }
 
+function stageBookingCreate(tx, dbClient, {
+  bookingId,
+  studioId,
+  actorUid,
+  actorRole = actorUid === OWNER_UID ? 'owner' : 'operator',
+  slotPlan,
+  status = 'CONFIRMED',
+  discountMinor = 0,
+  totalMinor = 300000,
+  slotSnapshots = [],
+}) {
+  const sessionStatus = status === 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING';
+  const operationContext = makeOperationContext({
+    bookingId,
+    studioId,
+    actorUid,
+    actorRole,
+    operationType: 'booking.create',
+    action: 'create',
+    resultBookingStatus: status,
+    resultSessionStatus: sessionStatus,
+  });
+  tx.set(
+    doc(dbClient, 'businesses', BIZ_ID, 'bookings', bookingId),
+    makeBookingPayload({
+      bookingId, studioId, actorUid, slotPlan, status,
+      discountMinor, totalMinor, operationContext,
+    }),
+  );
+
+  slotPlan.allSlots.forEach((slot, index) => {
+    const slotRef = doc(dbClient, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId);
+    const payload = makeSlotPayload({ slot, bookingId, actorUid });
+    if (slotSnapshots[index]?.exists()) tx.update(slotRef, payload);
+    else tx.set(slotRef, payload);
+  });
+
+  tx.set(
+    doc(dbClient, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId),
+    operationContext.marker,
+  );
+
+  const activityId = `booking.created__${bookingId}`;
+  tx.set(doc(dbClient, 'businesses', BIZ_ID, 'activityLogs', activityId), {
+    eventId: activityId,
+    businessId: BIZ_ID,
+    studioId,
+    eventType: 'booking.created',
+    entityType: 'booking',
+    entityId: bookingId,
+    operationId: activityId,
+    actorUid,
+    actorRole,
+    beforeStatus: null,
+    afterStatus: status,
+    reason: null,
+    summary: `Booking ${bookingId} dibuat`,
+    schemaVersion: 1,
+    createdAt: serverTimestamp(),
+  });
+}
+
+async function runSessionTransition(dbClient, {
+  bookingId,
+  actorUid,
+  actorRole = actorUid === OWNER_UID ? 'owner' : 'operator',
+  action,
+  reason = null,
+}) {
+  const resultByAction = {
+    check_in: { bookingStatus: 'CONFIRMED', sessionStatus: 'UPCOMING' },
+    start: { bookingStatus: 'CONFIRMED', sessionStatus: 'IN_PROGRESS' },
+    complete: { bookingStatus: 'COMPLETED_PENDING_SETTLEMENT', sessionStatus: 'COMPLETED' },
+    no_show: { bookingStatus: 'NO_SHOW', sessionStatus: 'NO_SHOW' },
+    cancel: { bookingStatus: 'CANCELLED', sessionStatus: 'CANCELLED' },
+    reject: { bookingStatus: 'REJECTED', sessionStatus: 'CANCELLED' },
+  };
+  const result = resultByAction[action];
+  if (!result) throw new Error(`Unsupported test action: ${action}`);
+
+  const operationContext = makeOperationContext({
+    bookingId,
+    studioId: 'studio-a',
+    actorUid,
+    actorRole,
+    operationType: 'booking.session',
+    action,
+    resultBookingStatus: result.bookingStatus,
+    resultSessionStatus: result.sessionStatus,
+  });
+
+  return runTransaction(dbClient, async (tx) => {
+    const bookingRef = doc(dbClient, 'businesses', BIZ_ID, 'bookings', bookingId);
+    const operationRef = doc(dbClient, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId);
+    const eventRef = doc(dbClient, 'businesses', BIZ_ID, 'bookingSessionEvents', operationContext.operationId);
+    const [bookingSnap, operationSnap] = await Promise.all([
+      tx.get(bookingRef),
+      tx.get(operationRef),
+    ]);
+    if (!bookingSnap.exists()) throw new Error('booking-not-found');
+    if (operationSnap.exists()) return;
+
+    const booking = bookingSnap.data();
+    const fromStatus = booking.sessionStatus || (
+      booking.status === 'PENDING_CONFIRMATION'
+        ? 'PENDING'
+        : booking.status === 'IN_PROGRESS'
+          ? 'IN_PROGRESS'
+          : 'UPCOMING'
+    );
+    const slotRefs = ['cancel', 'reject', 'no_show'].includes(action)
+      ? (booking.slotIds || []).map((slotId) => doc(dbClient, 'businesses', BIZ_ID, 'bookingSlots', slotId))
+      : [];
+    const slotSnapshots = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+
+    const bookingUpdate = {
+      status: result.bookingStatus,
+      sessionStatus: result.sessionStatus,
+      lastSessionEventId: operationContext.operationId,
+      lastSessionEventAt: serverTimestamp(),
+      lastSessionEventType: action,
+      lastOperationId: operationContext.operationId,
+      lastOperationType: 'booking.session',
+      lastOperationPayloadHash: operationContext.payloadHash,
+      updatedAt: serverTimestamp(),
+      updatedBy: actorUid,
+    };
+
+    if (action === 'check_in') {
+      bookingUpdate.checkedInAt = serverTimestamp();
+      bookingUpdate.checkedInByUid = actorUid;
+      bookingUpdate.checkedInByName = 'Test Actor';
+    } else if (action === 'start') {
+      bookingUpdate.actualStartAt = serverTimestamp();
+      bookingUpdate.actualStartByUid = actorUid;
+      bookingUpdate.actualStartByName = 'Test Actor';
+    } else if (action === 'complete') {
+      const actualStart = booking.actualStartAt?.toDate?.() || new Date();
+      bookingUpdate.actualEndAt = serverTimestamp();
+      bookingUpdate.actualEndByUid = actorUid;
+      bookingUpdate.actualEndByName = 'Test Actor';
+      bookingUpdate.actualDurationMinutes = Math.max(0, Math.floor((Date.now() - actualStart.getTime()) / 60000));
+      bookingUpdate.completedAt = serverTimestamp();
+    } else if (action === 'no_show') {
+      bookingUpdate.noShowAt = serverTimestamp();
+      bookingUpdate.noShowByUid = actorUid;
+      bookingUpdate.noShowByName = 'Test Actor';
+      bookingUpdate.noShowReason = reason;
+    } else {
+      bookingUpdate.cancelReason = reason;
+      bookingUpdate.cancelledBy = actorUid;
+      bookingUpdate.cancelledAt = serverTimestamp();
+    }
+
+    tx.update(bookingRef, bookingUpdate);
+
+    if (slotRefs.length) {
+      for (let index = 0; index < slotRefs.length; index += 1) {
+        const snap = slotSnapshots[index];
+        if (snap.exists() && snap.data().status === 'active' && snap.data().bookingId === bookingId) {
+          tx.update(slotRefs[index], {
+            status: 'released',
+            bookingId: null,
+            releasedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            updatedBy: actorUid,
+          });
+        }
+      }
+    }
+
+    tx.set(eventRef, {
+      eventId: operationContext.operationId,
+      businessId: BIZ_ID,
+      bookingId,
+      studioId: booking.studioId,
+      action,
+      fromStatus,
+      toStatus: result.sessionStatus,
+      actorUid,
+      actorRole,
+      actorName: 'Test Actor',
+      reason,
+      operationId: operationContext.operationId,
+      requestId: operationContext.requestId,
+      payloadHash: operationContext.payloadHash,
+      schemaVersion: 1,
+      createdAt: serverTimestamp(),
+    });
+    tx.set(operationRef, operationContext.marker);
+  });
+}
+
 async function seedTenantForPhase03() {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const adminDb = ctx.firestore();
@@ -125,94 +388,75 @@ async function seedTenantForPhase03() {
       updatedBy: OWNER_UID,
     });
 
-    await setDoc(doc(adminDb, 'businesses', BIZ_ID, 'settings', 'pricing'), {
-      settingId: 'pricing',
-      businessId: BIZ_ID,
-      currency: 'IDR',
-      taxPercent: 0,
-      allowOperatorDiscount: false,
-      roundingUnitMinor: 1,
-      configVersion: 1,
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: OWNER_UID,
-      updatedBy: OWNER_UID,
-    });
+    const members = [
+      {
+        uid: OWNER_UID,
+        email: 'owner@37musicstudio.test',
+        displayName: 'Studio Owner',
+        role: 'owner',
+        assignedStudioIds: [],
+        permissions: { canManageBookings: true },
+      },
+      {
+        uid: OP_A_UID,
+        email: 'operator-a@37musicstudio.test',
+        displayName: 'Operator Studio A',
+        role: 'operator',
+        assignedStudioIds: ['studio-a'],
+        permissions: { canManageBookings: true },
+      },
+      {
+        uid: OP_RESTRICTED_UID,
+        email: 'operator-restricted@37musicstudio.test',
+        displayName: 'Restricted Operator',
+        role: 'operator',
+        assignedStudioIds: [],
+        permissions: { canManageBookings: true },
+      },
+    ];
 
-    await setDoc(doc(adminDb, 'businesses', BIZ_ID, 'members', OWNER_UID), {
-      uid: OWNER_UID,
-      businessId: BIZ_ID,
-      email: 'owner@test.id',
-      displayName: 'Owner',
-      role: 'owner',
-      status: 'active',
-      assignedStudioIds: [],
-      permissions: { canManageBookings: true, canApplyDiscount: true },
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: OWNER_UID,
-      updatedBy: OWNER_UID,
-    });
-
-    await setDoc(doc(adminDb, 'businesses', BIZ_ID, 'members', OP_A_UID), {
-      uid: OP_A_UID,
-      businessId: BIZ_ID,
-      email: 'op-a@test.id',
-      displayName: 'Operator Studio A',
-      role: 'operator',
-      status: 'active',
-      assignedStudioIds: ['studio-a'],
-      permissions: { canManageBookings: true, canManageCustomers: true, canApplyDiscount: true },
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: OWNER_UID,
-      updatedBy: OWNER_UID,
-    });
-
-    await setDoc(doc(adminDb, 'businesses', BIZ_ID, 'members', OP_RESTRICTED_UID), {
-      uid: OP_RESTRICTED_UID,
-      businessId: BIZ_ID,
-      email: 'op-rest@test.id',
-      displayName: 'Operator Restricted',
-      role: 'operator',
-      status: 'active',
-      assignedStudioIds: ['studio-b'],
-      permissions: { canManageBookings: false },
-      schemaVersion: 1,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: OWNER_UID,
-      updatedBy: OWNER_UID,
-    });
-
-    for (const studioId of ['studio-a', 'studio-b']) {
-      await setDoc(doc(adminDb, 'businesses', BIZ_ID, 'studios', studioId), {
-        studioId,
+    await Promise.all(members.map((member) => setDoc(
+      doc(adminDb, 'businesses', BIZ_ID, 'members', member.uid),
+      {
+        ...member,
         businessId: BIZ_ID,
-        name: studioId.toUpperCase(),
-        code: studioId.toUpperCase(),
         status: 'active',
-        timezone: 'Asia/Jakarta',
-        operatingHours: { openTime: '10:00', closeTime: '22:00' },
-        slotGranularityMinutes: 15,
-        description: null,
         schemaVersion: 1,
         createdAt: now,
         updatedAt: now,
         createdBy: OWNER_UID,
         updatedBy: OWNER_UID,
-      });
-    }
+      },
+    )));
+
+    const studios = [
+      { studioId: 'studio-a', name: 'Studio A (Main)', code: 'STUDIO-A', slotGranularityMinutes: 15 },
+      { studioId: 'studio-b', name: 'Studio B (Mixing)', code: 'STUDIO-B', slotGranularityMinutes: 30 },
+    ];
+
+    await Promise.all(studios.map((studio) => setDoc(
+      doc(adminDb, 'businesses', BIZ_ID, 'studios', studio.studioId),
+      {
+        ...studio,
+        businessId: BIZ_ID,
+        status: 'active',
+        timezone: 'Asia/Jakarta',
+        operatingHours: { openTime: '10:00', closeTime: '22:00' },
+        description: studio.name,
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: OWNER_UID,
+        updatedBy: OWNER_UID,
+      },
+    )));
   });
 }
 
-describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
+describe('Phase 10 booking/session Firestore Rules & atomic transactions', () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
-      projectId: 'musicstudio37app-phase03-rules',
+      projectId: 'musicstudio37app-phase10-rules',
       firestore: {
         rules: readFileSync(RULES_PATH, 'utf8'),
         host: '127.0.0.1',
@@ -227,15 +471,12 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
   });
 
   afterAll(async () => {
-    if (testEnv) {
-      await testEnv.cleanup();
-    }
+    if (testEnv) await testEnv.cleanup();
   });
 
-  it('prevents overlapping double booking, blocks active slot hijacking, and supports atomic release + re-claim', async () => {
+  it('creates booking + slot locks + operation marker atomically, releases them on cancel, and reclaims released slots only with a new booking', async () => {
     const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
     const opADb = testEnv.authenticatedContext(OP_A_UID).firestore();
-
     const plan1 = computeBookingSlotPlan({
       studioId: 'studio-a',
       dateKey: DATE_KEY,
@@ -245,95 +486,183 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
       slotGranularityMinutes: 15,
     });
 
-    // Booking 1 claims 14:00-15:30 (6 deterministic slots)
-    await assertSucceeds(
-      runTransaction(ownerDb, async (tx) => {
-        const bkRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-1');
-        const slotRefs = plan1.allSlots.map((s) =>
-          doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', s.slotId),
-        );
-        await tx.get(bkRef);
-        await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-1');
+      await tx.get(bookingRef);
+      const slotRefs = plan1.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const slotSnapshots = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-1', studioId: 'studio-a', actorUid: OWNER_UID,
+        slotPlan: plan1, slotSnapshots,
+      });
+    }));
 
-        tx.set(bkRef, makeBookingPayload({ bookingId: 'bk-1', studioId: 'studio-a', actorUid: OWNER_UID, slotPlan: plan1 }));
-        plan1.allSlots.forEach((slot, i) => {
-          tx.set(slotRefs[i], makeSlotPayload({ slot, bookingId: 'bk-1', actorUid: OWNER_UID }));
-        });
-        tx.set(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'booking.created__bk-1'), {
-          eventId: 'booking.created__bk-1',
-          businessId: BIZ_ID,
-          studioId: 'studio-a',
-          eventType: 'booking.created',
-          entityType: 'booking',
-          entityId: 'bk-1',
-          operationId: 'booking.created__bk-1',
-          actorUid: OWNER_UID,
-          actorRole: 'owner',
-          beforeStatus: null,
-          afterStatus: 'CONFIRMED',
-          reason: null,
-          summary: 'Booking 1 dibuat',
-          schemaVersion: 1,
-          createdAt: serverTimestamp(),
-        });
-      }),
-    );
+    const hijackId = 'studio-a__2026-11-20__60';
+    await assertFails(updateDoc(doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', hijackId), {
+      bookingId: 'bk-hijack',
+      status: 'active',
+      updatedBy: OP_A_UID,
+      updatedAt: serverTimestamp(),
+    }));
 
-    // Concurrent/rogue overwrite of already-active slot 15:00 (`__60`) by another booking FAILS in Rules
-    const overlapSlotId = 'studio-a__2026-11-20__60';
-    await assertFails(
-      updateDoc(doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', overlapSlotId), {
-        bookingId: 'bk-hijack',
-        status: 'active',
-        updatedBy: OP_A_UID,
-        updatedAt: serverTimestamp(),
-      }),
-    );
+    const orphanPlan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '20:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+    });
+    const orphanSlot = orphanPlan.allSlots[0];
+    await assertFails(setDoc(
+      doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', orphanSlot.slotId),
+      makeSlotPayload({ slot: orphanSlot, bookingId: 'bk-missing-companion', actorUid: OP_A_UID }),
+    ));
 
-    // Cancel bk-1 atomically releasing slots ('active' -> 'released', bookingId: null)
-    await assertSucceeds(
-      runTransaction(ownerDb, async (tx) => {
-        const bkRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-1');
-        tx.update(bkRef, {
-          status: 'CANCELLED',
-          cancelReason: 'Band batal',
-          cancelledBy: OWNER_UID,
-          cancelledAt: serverTimestamp(),
-          updatedBy: OWNER_UID,
-          updatedAt: serverTimestamp(),
-        });
-        for (const sId of plan1.slotIds) {
-          tx.update(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', sId), {
-            status: 'released',
-            bookingId: null,
-            releasedAt: serverTimestamp(),
-            updatedBy: OWNER_UID,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }),
-    );
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-1',
+      actorUid: OWNER_UID,
+      action: 'cancel',
+      reason: 'Band batal',
+    }));
 
-    // Another booking bk-2 can now atomically re-claim previously released slot 15:00
-    await assertSucceeds(
-      updateDoc(doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', overlapSlotId), {
-        bookingId: 'bk-2',
-        status: 'active',
-        reservedBy: OP_A_UID,
-        reservedAt: serverTimestamp(),
-        releasedAt: null,
-        updatedBy: OP_A_UID,
-        updatedAt: serverTimestamp(),
-      }),
-    );
+    const plan2 = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '15:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+    await assertSucceeds(runTransaction(opADb, async (tx) => {
+      const bookingRef = doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-2');
+      await tx.get(bookingRef);
+      const refs = plan2.allSlots.map((slot) => doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, opADb, {
+        bookingId: 'bk-2', studioId: 'studio-a', actorUid: OP_A_UID,
+        slotPlan: plan2, slotSnapshots: snapshots,
+      });
+    }));
+
+    const claimed = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', hijackId));
+    expect(claimed.data().status).toBe('active');
+    expect(claimed.data().bookingId).toBe('bk-2');
+    const cancelEvent = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSessionEvents', 'booking_session__cancel__bk-1'));
+    expect(cancelEvent.exists()).toBe(true);
   });
 
-  it('allows long 8-hour (32-slot) Operator booking on assigned studio while strictly blocking cross-studio & revoked access', async () => {
+  it('rejects an initial booking/session status mismatch even when the operation marker matches the written document', async () => {
     const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const bookingId = 'bk-invalid-initial-session-state';
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '20:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+    });
+    const operationContext = makeOperationContext({
+      bookingId,
+      studioId: 'studio-a',
+      actorUid: OWNER_UID,
+      actorRole: 'owner',
+      operationType: 'booking.create',
+      action: 'create',
+      resultBookingStatus: 'CONFIRMED',
+      resultSessionStatus: 'COMPLETED',
+    });
+
+    await assertFails(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', bookingId);
+      const operationRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId);
+      const [bookingSnap, operationSnap] = await Promise.all([
+        tx.get(bookingRef),
+        tx.get(operationRef),
+      ]);
+      expect(bookingSnap.exists()).toBe(false);
+      expect(operationSnap.exists()).toBe(false);
+
+      tx.set(bookingRef, {
+        ...makeBookingPayload({
+          bookingId,
+          studioId: 'studio-a',
+          actorUid: OWNER_UID,
+          slotPlan: plan,
+          operationContext,
+        }),
+        sessionStatus: 'COMPLETED',
+      });
+      tx.set(operationRef, operationContext.marker);
+    }));
+
+    expect((await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', bookingId))).exists()).toBe(false);
+    expect((await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId))).exists()).toBe(false);
+  });
+
+  it('documents the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '20:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+    });
+    const operationContext = makeOperationContext({
+      bookingId: 'bk-direct-accepted-risk',
+      studioId: 'studio-a',
+      actorUid: OWNER_UID,
+      actorRole: 'owner',
+      operationType: 'booking.create',
+      action: 'create',
+      resultBookingStatus: 'CONFIRMED',
+      resultSessionStatus: 'UPCOMING',
+    });
+
+    // This deliberately bypasses the official repository and writes only the
+    // booking + its marker. Option A explicitly accepts that Rules cannot
+    // iterate all arbitrary slotIds and prove every lock exists.
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-direct-accepted-risk');
+      const operationRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId);
+      const [bookingSnap, operationSnap] = await Promise.all([
+        tx.get(bookingRef),
+        tx.get(operationRef),
+      ]);
+      expect(bookingSnap.exists()).toBe(false);
+      expect(operationSnap.exists()).toBe(false);
+      tx.set(bookingRef, makeBookingPayload({
+        bookingId: 'bk-direct-accepted-risk',
+        studioId: 'studio-a',
+        actorUid: OWNER_UID,
+        slotPlan: plan,
+        operationContext,
+      }));
+      tx.set(operationRef, operationContext.marker);
+    }));
+
+    const booking = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-direct-accepted-risk'));
+    expect(booking.exists()).toBe(true);
+
+    const delayedSlot = plan.allSlots[0];
+    await assertFails(setDoc(
+      doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', delayedSlot.slotId),
+      makeSlotPayload({
+        slot: delayedSlot,
+        bookingId: 'bk-direct-accepted-risk',
+        actorUid: OWNER_UID,
+      }),
+    ));
+
+    for (const slotId of plan.slotIds) {
+      const slot = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId));
+      expect(slot.exists()).toBe(false);
+    }
+  });
+
+  it('supports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes', async () => {
     const opADb = testEnv.authenticatedContext(OP_A_UID).firestore();
     const opRestrictedDb = testEnv.authenticatedContext(OP_RESTRICTED_UID).firestore();
-
-    // 8-hour session = 32 contiguous 15-min slots (proves tx stays well under Rules get/exists limits)
     const longPlan = computeBookingSlotPlan({
       studioId: 'studio-a',
       dateKey: DATE_KEY,
@@ -344,72 +673,56 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
     });
     expect(longPlan.allSlots).toHaveLength(32);
 
-    await assertSucceeds(
-      runTransaction(opADb, async (tx) => {
-        const bkRef = doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-long');
-        const slotRefs = longPlan.allSlots.map((s) =>
-          doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', s.slotId),
-        );
-        // Reads non-existent slots using split('__')[0] Rule support
-        await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+    await assertSucceeds(runTransaction(opADb, async (tx) => {
+      const bookingRef = doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-long');
+      await tx.get(bookingRef);
+      const refs = longPlan.allSlots.map((slot) => doc(opADb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, opADb, {
+        bookingId: 'bk-long', studioId: 'studio-a', actorUid: OP_A_UID,
+        slotPlan: longPlan, totalMinor: 1200000, slotSnapshots: snapshots,
+      });
+    }));
 
-        tx.set(bkRef, makeBookingPayload({ bookingId: 'bk-long', studioId: 'studio-a', actorUid: OP_A_UID, slotPlan: longPlan, totalMinor: 1200000 }));
-        longPlan.allSlots.forEach((slot, i) => {
-          tx.set(slotRefs[i], makeSlotPayload({ slot, bookingId: 'bk-long', actorUid: OP_A_UID }));
-        });
-      }),
-    );
-
-    // Scoped list queries succeed on studio-a; unfiltered list or studio-b fail for Operator A
-    await assertSucceeds(
-      getDocs(
-        query(
-          collection(opADb, 'businesses', BIZ_ID, 'bookings'),
-          where('studioId', 'in', ['studio-a']),
-          where('dateKey', '>=', DATE_KEY),
-          where('dateKey', '<=', DATE_KEY),
-          orderBy('dateKey', 'asc'),
-          orderBy('startAt', 'asc'),
-        ),
-      ),
-    );
+    await assertSucceeds(getDocs(query(
+      collection(opADb, 'businesses', BIZ_ID, 'bookings'),
+      where('studioId', 'in', ['studio-a']),
+      where('dateKey', '>=', DATE_KEY),
+      where('dateKey', '<=', DATE_KEY),
+      orderBy('dateKey', 'asc'),
+      orderBy('startAt', 'asc'),
+    )));
     await assertFails(getDocs(collection(opADb, 'businesses', BIZ_ID, 'bookings')));
-    await assertFails(
-      setDoc(
-        doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-unassigned'),
-        makeBookingPayload({
-          bookingId: 'bk-unassigned',
-          studioId: 'studio-b',
-          actorUid: OP_A_UID,
-          slotPlan: computeBookingSlotPlan({
-            studioId: 'studio-b',
-            dateKey: DATE_KEY,
-            startTime: '10:00',
-            durationMinutes: 60,
-            operatingHours: { openTime: '10:00', closeTime: '22:00' },
-          }),
+    await assertFails(setDoc(
+      doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-direct-no-marker'),
+      makeBookingPayload({
+        bookingId: 'bk-direct-no-marker',
+        studioId: 'studio-a',
+        actorUid: OP_A_UID,
+        slotPlan: computeBookingSlotPlan({
+          studioId: 'studio-a', dateKey: DATE_KEY, startTime: '20:00', durationMinutes: 60,
+          operatingHours: { openTime: '10:00', closeTime: '22:00' },
         }),
-      ),
-    );
-
-    // Operator without canManageBookings cannot book even on own assigned studio-b
+      }),
+    ));
     await assertFails(getDoc(doc(opRestrictedDb, 'businesses', BIZ_ID, 'bookingSlots', 'studio-b__2026-11-20__40')));
 
-    // Owner revokes studio-a from OP_A_UID -> immediate read failure on bk-long
-    await assertSucceeds(
-      updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'members', OP_A_UID), {
-        assignedStudioIds: [],
-        updatedBy: OWNER_UID,
-        updatedAt: serverTimestamp(),
+    await assertFails(setDoc(
+      doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-unassigned'),
+      makeBookingPayload({
+        bookingId: 'bk-unassigned',
+        studioId: 'studio-b',
+        actorUid: OP_A_UID,
+        slotPlan: computeBookingSlotPlan({
+          studioId: 'studio-b', dateKey: DATE_KEY, startTime: '10:00', durationMinutes: 60,
+          operatingHours: { openTime: '10:00', closeTime: '22:00' },
+        }),
       }),
-    );
-    await assertFails(getDoc(doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-long')));
+    ));
   });
 
-  it('enforces discount policy, price snapshot immutability, Phase 04 transition lock, append-only activityLogs, and Phase 04+ locks', async () => {
+  it('requires session markers for check-in/start/complete and preserves Finance handoff', async () => {
     const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
-    const opADb = testEnv.authenticatedContext(OP_A_UID).firestore();
-
     const plan = computeBookingSlotPlan({
       studioId: 'studio-a',
       dateKey: DATE_KEY,
@@ -419,102 +732,274 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
       slotGranularityMinutes: 15,
     });
 
-    // Operator cannot apply discount when settings/pricing.allowOperatorDiscount is false
-    await assertFails(
-      setDoc(
-        doc(opADb, 'businesses', BIZ_ID, 'bookings', 'bk-disc-fail'),
-        makeBookingPayload({
-          bookingId: 'bk-disc-fail',
-          studioId: 'studio-a',
-          actorUid: OP_A_UID,
-          slotPlan: plan,
-          discountMinor: 50000,
-          totalMinor: 100000,
-        }),
-      ),
-    );
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-session');
+      await tx.get(bookingRef);
+      const refs = plan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-session', studioId: 'studio-a', actorUid: OWNER_UID,
+        slotPlan: plan, slotSnapshots: snapshots,
+      });
+    }));
 
-    // Owner creates valid booking + append-only activity log
-    await assertSucceeds(
-      setDoc(
-        doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm'),
-        makeBookingPayload({
-          bookingId: 'bk-imm',
-          studioId: 'studio-a',
-          actorUid: OWNER_UID,
-          slotPlan: plan,
-          status: 'CONFIRMED',
-        }),
-      ),
-    );
-    await assertSucceeds(
-      setDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm'), {
-        eventId: 'ev-imm',
-        businessId: BIZ_ID,
-        studioId: 'studio-a',
-        eventType: 'booking.created',
-        entityType: 'booking',
-        entityId: 'bk-imm',
-        operationId: 'ev-imm',
-        actorUid: OWNER_UID,
-        actorRole: 'owner',
-        beforeStatus: null,
-        afterStatus: 'CONFIRMED',
-        reason: null,
-        summary: 'Dibuat',
-        schemaVersion: 1,
-        createdAt: serverTimestamp(),
-      }),
-    );
+    const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-session');
+    await assertFails(updateDoc(bookingRef, {
+      status: 'IN_PROGRESS',
+      checkedInAt: serverTimestamp(),
+      updatedBy: OWNER_UID,
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(bookingRef, {
+      status: 'SETTLED',
+      updatedBy: OWNER_UID,
+      updatedAt: serverTimestamp(),
+    }));
 
-    // Owner cannot edit priceSnapshot during status transition, nor jump to SETTLED before Phase 04
-    await assertFails(
-      updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm'), {
-        status: 'IN_PROGRESS',
-        priceSnapshot: { currency: 'IDR', baseSubtotalMinor: 300000, discountMinor: 0, totalMinor: 1000 },
-        updatedBy: OWNER_UID,
-        updatedAt: serverTimestamp(),
-      }),
-    );
-    await assertFails(
-      updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm'), {
-        status: 'SETTLED',
-        updatedBy: OWNER_UID,
-        updatedAt: serverTimestamp(),
-      }),
-    );
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-session', actorUid: OWNER_UID, action: 'check_in',
+    }));
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-session', actorUid: OWNER_UID, action: 'start',
+    }));
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-session', actorUid: OWNER_UID, action: 'complete',
+    }));
 
-    // Valid transition CONFIRMED -> IN_PROGRESS -> COMPLETED_PENDING_SETTLEMENT succeeds cleanly
-    await assertSucceeds(
-      updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm'), {
-        status: 'IN_PROGRESS',
-        checkedInAt: serverTimestamp(),
-        updatedBy: OWNER_UID,
-        updatedAt: serverTimestamp(),
-      }),
-    );
-    await assertSucceeds(
-      updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm'), {
-        status: 'COMPLETED_PENDING_SETTLEMENT',
-        completedAt: serverTimestamp(),
-        updatedBy: OWNER_UID,
-        updatedAt: serverTimestamp(),
-      }),
-    );
+    const booking = (await getDoc(bookingRef)).data();
+    expect(booking.status).toBe('COMPLETED_PENDING_SETTLEMENT');
+    expect(booking.sessionStatus).toBe('COMPLETED');
+    expect(booking.actualStartAt).toBeDefined();
+    expect(booking.actualEndAt).toBeDefined();
+    expect(booking.actualDurationMinutes).toBeGreaterThanOrEqual(0);
 
-    // Hard delete / log overwrite denied; Operator cannot read ledger; Phase 06+ collections stay locked
-    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-imm')));
-    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm'), { summary: 'Tampered' }));
-    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'ev-imm')));
-    await assertFails(getDoc(doc(opADb, 'businesses', BIZ_ID, 'ledgerEntries', 'led-1')));
-    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'unreleasedPhaseModule', 'doc-1')));
+    const eventId = 'booking_session__complete__bk-session';
+    const eventRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingSessionEvents', eventId);
+    expect((await getDoc(eventRef)).exists()).toBe(true);
+    await assertFails(updateDoc(eventRef, { actorName: 'Tampered' }));
+    await assertFails(deleteDoc(eventRef));
+
+    const operationRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', eventId);
+    expect((await getDoc(operationRef)).exists()).toBe(true);
+    await assertFails(updateDoc(operationRef, { payloadHash: 'b'.repeat(64) }));
+    await assertFails(deleteDoc(operationRef));
+
+    const activityRef = doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'booking.created__bk-session');
+    expect((await getDoc(activityRef)).exists()).toBe(true);
+    await assertFails(updateDoc(activityRef, { summary: 'Tampered' }));
+    await assertFails(deleteDoc(activityRef));
+    await assertSucceeds(updateDoc(bookingRef, {
+      status: 'SETTLEMENT_REVIEW',
+      updatedBy: OWNER_UID,
+      updatedAt: serverTimestamp(),
+    }));
   });
 
-  it('prevents concurrent race double-booking across two simultaneous clients and executes partial-overlap atomic reschedule', async () => {
+  it('cancels an already-started separate session without fabricating an end timestamp and releases owned slots', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '17:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-cancel-after-start');
+      await tx.get(bookingRef);
+      const refs = plan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-cancel-after-start',
+        studioId: 'studio-a',
+        actorUid: OWNER_UID,
+        slotPlan: plan,
+        slotSnapshots: snapshots,
+      });
+    }));
+
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-cancel-after-start',
+      actorUid: OWNER_UID,
+      action: 'start',
+    }));
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-cancel-after-start',
+      actorUid: OWNER_UID,
+      action: 'cancel',
+      reason: 'Operasional darurat',
+    }));
+
+    const booking = (await getDoc(doc(
+      ownerDb,
+      'businesses',
+      BIZ_ID,
+      'bookings',
+      'bk-cancel-after-start',
+    ))).data();
+    expect(booking.status).toBe('CANCELLED');
+    expect(booking.sessionStatus).toBe('CANCELLED');
+    expect(booking.actualStartAt).toBeDefined();
+    expect(booking.actualEndAt ?? null).toBeNull();
+
+    const event = await getDoc(doc(
+      ownerDb,
+      'businesses',
+      BIZ_ID,
+      'bookingSessionEvents',
+      'booking_session__cancel__bk-cancel-after-start',
+    ));
+    expect(event.exists()).toBe(true);
+    expect(event.data().fromStatus).toBe('IN_PROGRESS');
+    expect(event.data().toStatus).toBe('CANCELLED');
+
+    for (const slotId of plan.slotIds) {
+      const slot = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId))).data();
+      expect(slot.status).toBe('released');
+      expect(slot.bookingId).toBeNull();
+    }
+  });
+
+
+  it('completes a legacy IN_PROGRESS booking only when its actual start timestamp exists, preserving held slots', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '16:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-legacy-complete');
+      await tx.get(bookingRef);
+      const refs = plan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-legacy-complete',
+        studioId: 'studio-a',
+        actorUid: OWNER_UID,
+        slotPlan: plan,
+        slotSnapshots: snapshots,
+      });
+    }));
+
+    const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-legacy-complete');
+    const legacyActualStart = Timestamp.fromDate(new Date(Date.now() - 120_000));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'businesses', BIZ_ID, 'bookings', 'bk-legacy-complete'), {
+        status: 'IN_PROGRESS',
+        sessionStatus: deleteField(),
+        actualStartAt: legacyActualStart,
+        actualStartByUid: OWNER_UID,
+        actualStartByName: 'Legacy Owner',
+      });
+    });
+
+    const legacyBefore = (await getDoc(bookingRef)).data();
+    expect(legacyBefore.status).toBe('IN_PROGRESS');
+    expect(legacyBefore.sessionStatus).toBeUndefined();
+    expect(legacyBefore.actualStartAt.toMillis()).toBe(legacyActualStart.toMillis());
+
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-legacy-complete',
+      actorUid: OWNER_UID,
+      action: 'complete',
+    }));
+
+    const completed = (await getDoc(bookingRef)).data();
+    expect(completed.status).toBe('COMPLETED_PENDING_SETTLEMENT');
+    expect(completed.sessionStatus).toBe('COMPLETED');
+    expect(completed.actualStartAt.toMillis()).toBe(legacyActualStart.toMillis());
+    expect(completed.actualEndAt).toBeDefined();
+    expect(completed.actualDurationMinutes).toBeGreaterThanOrEqual(0);
+
+    const event = (await getDoc(doc(
+      ownerDb,
+      'businesses',
+      BIZ_ID,
+      'bookingSessionEvents',
+      'booking_session__complete__bk-legacy-complete',
+    ))).data();
+    expect(event.fromStatus).toBe('IN_PROGRESS');
+    expect(event.toStatus).toBe('COMPLETED');
+
+    for (const slotId of plan.slotIds) {
+      const slot = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId))).data();
+      expect(slot.status).toBe('active');
+      expect(slot.bookingId).toBe('bk-legacy-complete');
+    }
+  });
+
+  it('enforces No-Show grace and releases the complete owned slot set atomically', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const futurePlan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '19:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-no-show-early');
+      await tx.get(bookingRef);
+      const refs = futurePlan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-no-show-early', studioId: 'studio-a', actorUid: OWNER_UID,
+        slotPlan: futurePlan, slotSnapshots: snapshots,
+      });
+    }));
+    await assertFails(runSessionTransition(ownerDb, {
+      bookingId: 'bk-no-show-early',
+      actorUid: OWNER_UID,
+      action: 'no_show',
+      reason: 'Tidak hadir',
+    }));
+
+    const pastPlan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: '2026-11-16',
+      startTime: '19:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-no-show-valid');
+      await tx.get(bookingRef);
+      const refs = pastPlan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-no-show-valid', studioId: 'studio-a', actorUid: OWNER_UID,
+        slotPlan: pastPlan, slotSnapshots: snapshots,
+      });
+    }));
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-no-show-valid',
+      actorUid: OWNER_UID,
+      action: 'no_show',
+      reason: 'Customer tidak hadir',
+    }));
+    const booking = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-no-show-valid'))).data();
+    expect(booking.status).toBe('NO_SHOW');
+    expect(booking.sessionStatus).toBe('NO_SHOW');
+    for (const slotId of pastPlan.slotIds) {
+      const slot = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId))).data();
+      expect(slot.status).toBe('released');
+      expect(slot.bookingId).toBeNull();
+    }
+  });
+
+  it('serializes concurrent overlapping creates and validates reschedule slot swaps with operation markers', async () => {
     const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
     const opADb = testEnv.authenticatedContext(OP_A_UID).firestore();
-
-    const slotPlanInitial = computeBookingSlotPlan({
+    const initialPlan = computeBookingSlotPlan({
       studioId: 'studio-a',
       dateKey: DATE_KEY,
       startTime: '12:00',
@@ -523,39 +1008,37 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
       slotGranularityMinutes: 15,
     });
 
-    const attemptConcurrentBook = (dbClient, bookingId, actorUid) =>
-      runTransaction(dbClient, async (tx) => {
-        const bkRef = doc(dbClient, 'businesses', BIZ_ID, 'bookings', bookingId);
-        const slotRefs = slotPlanInitial.allSlots.map((s) =>
-          doc(dbClient, 'businesses', BIZ_ID, 'bookingSlots', s.slotId),
-        );
-        const slotSnaps = await Promise.all(slotRefs.map((r) => tx.get(r)));
-        if (slotSnaps.some((s) => s.exists() && s.data().status === 'active')) {
-          throw new Error('slot-conflict');
-        }
-        tx.set(bkRef, makeBookingPayload({ bookingId, studioId: 'studio-a', actorUid, slotPlan: slotPlanInitial }));
-        slotPlanInitial.allSlots.forEach((slot, i) => {
-          tx.set(slotRefs[i], makeSlotPayload({ slot, bookingId, actorUid }));
-        });
+    const attemptCreate = (dbClient, bookingId, actorUid, actorRole) => runTransaction(dbClient, async (tx) => {
+      const bookingRef = doc(dbClient, 'businesses', BIZ_ID, 'bookings', bookingId);
+      await tx.get(bookingRef);
+      const refs = initialPlan.allSlots.map((slot) => doc(dbClient, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      if (snapshots.some((snap) => snap.exists() && snap.data().status === 'active')) {
+        throw new Error('slot-conflict');
+      }
+      stageBookingCreate(tx, dbClient, {
+        bookingId,
+        studioId: 'studio-a',
+        actorUid,
+        actorRole,
+        slotPlan: initialPlan,
+        slotSnapshots: snapshots,
       });
+    });
 
     const [resOwner, resOp] = await Promise.allSettled([
-      attemptConcurrentBook(ownerDb, 'bk-race-owner', OWNER_UID),
-      attemptConcurrentBook(opADb, 'bk-race-op', OP_A_UID),
+      attemptCreate(ownerDb, 'bk-race-owner', OWNER_UID, 'owner'),
+      attemptCreate(opADb, 'bk-race-op', OP_A_UID, 'operator'),
     ]);
-
-    const fulfilled = [resOwner, resOp].filter((r) => r.status === 'fulfilled');
-    const rejected = [resOwner, resOp].filter((r) => r.status === 'rejected');
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
+    expect([resOwner, resOp].filter((item) => item.status === 'fulfilled')).toHaveLength(1);
+    expect([resOwner, resOp].filter((item) => item.status === 'rejected')).toHaveLength(1);
 
     const winnerIsOwner = resOwner.status === 'fulfilled';
     const winnerDb = winnerIsOwner ? ownerDb : opADb;
     const winnerUid = winnerIsOwner ? OWNER_UID : OP_A_UID;
+    const winnerRole = winnerIsOwner ? 'owner' : 'operator';
     const winnerBookingId = winnerIsOwner ? 'bk-race-owner' : 'bk-race-op';
-
-    // Partial-overlap reschedule: 12:00-13:00 (`48..51`) -> 12:30-13:30 (`50..53`)
-    const slotPlanShifted = computeBookingSlotPlan({
+    const shiftedPlan = computeBookingSlotPlan({
       studioId: 'studio-a',
       dateKey: DATE_KEY,
       startTime: '12:30',
@@ -564,37 +1047,51 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
       slotGranularityMinutes: 15,
     });
 
-    await assertSucceeds(
-      runTransaction(winnerDb, async (tx) => {
-        const bkRef = doc(winnerDb, 'businesses', BIZ_ID, 'bookings', winnerBookingId);
-        const bkSnap = await tx.get(bkRef);
-        const current = bkSnap.data();
+    await assertSucceeds(runTransaction(winnerDb, async (tx) => {
+      const bookingRef = doc(winnerDb, 'businesses', BIZ_ID, 'bookings', winnerBookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      const current = bookingSnap.data();
+      const unionIds = Array.from(new Set([...current.slotIds, ...shiftedPlan.slotIds]));
+      const refs = new Map(unionIds.map((id) => [id, doc(winnerDb, 'businesses', BIZ_ID, 'bookingSlots', id)]));
+      const snapshotsArray = await Promise.all(unionIds.map((id) => tx.get(refs.get(id))));
+      const snapshotMap = new Map(unionIds.map((id, index) => [id, snapshotsArray[index]]));
+      const operationContext = makeOperationContext({
+        bookingId: winnerBookingId,
+        studioId: 'studio-a',
+        actorUid: winnerUid,
+        actorRole: winnerRole,
+        operationType: 'booking.reschedule',
+        action: 'reschedule',
+        resultBookingStatus: current.status,
+        resultSessionStatus: current.sessionStatus,
+      });
 
-        const oldSet = new Set(current.slotIds);
-        const newSet = new Set(slotPlanShifted.slotIds);
-        const unionIds = Array.from(new Set([...current.slotIds, ...slotPlanShifted.slotIds]));
-        const refMap = new Map(
-          unionIds.map((id) => [id, doc(winnerDb, 'businesses', BIZ_ID, 'bookingSlots', id)]),
-        );
-        const snapEntries = await Promise.all(
-          unionIds.map(async (id) => [id, await tx.get(refMap.get(id))]),
-        );
-        const snapMap = new Map(snapEntries);
+      const nextCount = current.rescheduleCount + 1;
+      tx.update(bookingRef, {
+        dateKey: shiftedPlan.dateKey,
+        timezone: shiftedPlan.timezone,
+        startTime: shiftedPlan.startTime,
+        endTime: shiftedPlan.endTime,
+        durationMinutes: shiftedPlan.durationMinutes,
+        bufferMinutes: shiftedPlan.bufferMinutes,
+        startAt: Timestamp.fromDate(shiftedPlan.startAt),
+        endAt: Timestamp.fromDate(shiftedPlan.endAt),
+        slotIds: shiftedPlan.slotIds,
+        rescheduleCount: nextCount,
+        lastOperationId: operationContext.operationId,
+        lastOperationType: 'booking.reschedule',
+        lastOperationPayloadHash: operationContext.payloadHash,
+        updatedBy: winnerUid,
+        updatedAt: serverTimestamp(),
+      });
 
-        tx.update(bkRef, {
-          startTime: slotPlanShifted.startTime,
-          endTime: slotPlanShifted.endTime,
-          startAt: Timestamp.fromDate(slotPlanShifted.startAt),
-          endAt: Timestamp.fromDate(slotPlanShifted.endAt),
-          slotIds: slotPlanShifted.slotIds,
-          rescheduleCount: current.rescheduleCount + 1,
-          updatedBy: winnerUid,
-          updatedAt: serverTimestamp(),
-        });
-
-        for (const oldId of current.slotIds) {
-          if (!newSet.has(oldId)) {
-            tx.update(refMap.get(oldId), {
+      const nextSet = new Set(shiftedPlan.slotIds);
+      const oldSet = new Set(current.slotIds);
+      for (const oldId of current.slotIds) {
+        if (!nextSet.has(oldId)) {
+          const snap = snapshotMap.get(oldId);
+          if (snap.exists() && snap.data().status === 'active' && snap.data().bookingId === winnerBookingId) {
+            tx.update(refs.get(oldId), {
               status: 'released',
               bookingId: null,
               releasedAt: serverTimestamp(),
@@ -603,16 +1100,23 @@ describe('Phase 03 Firestore Security Rules & Atomic Transactions', () => {
             });
           }
         }
-
-        for (const newSlot of slotPlanShifted.allSlots) {
-          if (!oldSet.has(newSlot.slotId) && !snapMap.get(newSlot.slotId)?.exists()) {
-            tx.set(refMap.get(newSlot.slotId), makeSlotPayload({ slot: newSlot, bookingId: winnerBookingId, actorUid: winnerUid }));
-          }
+      }
+      for (const newSlot of shiftedPlan.allSlots) {
+        const snap = snapshotMap.get(newSlot.slotId);
+        if (!oldSet.has(newSlot.slotId) || (snap.exists() && snap.data().status === 'released')) {
+          const ref = refs.get(newSlot.slotId);
+          const payload = makeSlotPayload({ slot: newSlot, bookingId: winnerBookingId, actorUid: winnerUid });
+          if (snap.exists()) tx.update(ref, payload);
+          else tx.set(ref, payload);
         }
-      }),
-    );
+      }
 
-    // Released bucket 48 (12:00) is genuinely released (`bookingId: null`); claimed bucket 52 (13:00) is active
+      tx.set(
+        doc(winnerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId),
+        operationContext.marker,
+      );
+    }));
+
     const releasedSnap = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', 'studio-a__2026-11-20__48'));
     const claimedSnap = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', 'studio-a__2026-11-20__52'));
     expect(releasedSnap.data().status).toBe('released');

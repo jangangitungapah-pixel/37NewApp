@@ -1,0 +1,452 @@
+﻿[2026-11-17 14:49:38 +07:00] 37NewApp - Phase 10 Booking Rules Optimization Verification
+[2026-11-17 14:49:38 +07:00] Repository root: C:\Users\hazel\source\repos\37NewApp
+[2026-11-17 14:49:38 +07:00] Log file: C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules-20261117-144937.txt
+[2026-11-17 14:49:38 +07:00] Safety: local verification only; no deploy, Hosting publish, merge, or production data writes.
+[2026-11-17 14:49:38 +07:00] 
+[2026-11-17 14:49:38 +07:00] ===== STAGE: PowerShell parser check =====
+PowerShell parser: PASS
+[2026-11-17 14:49:38 +07:00] EXIT_CODE [PowerShell parser check] = 0
+[2026-11-17 14:49:38 +07:00] 
+[2026-11-17 14:49:38 +07:00] ===== STAGE: Branch guard =====
+Branch: feature/phase-10-booking-session-lifecycle
+[2026-11-17 14:49:38 +07:00] EXIT_CODE [Branch guard] = 0
+[2026-11-17 14:49:38 +07:00] 
+[2026-11-17 14:49:38 +07:00] ===== STAGE: Runtime versions =====
+v24.19.0
+11.17.0
+[2026-11-17 14:49:39 +07:00] EXIT_CODE [Runtime versions] = 0
+[2026-11-17 14:49:39 +07:00] 
+[2026-11-17 14:49:39 +07:00] ===== STAGE: ESLint =====
+
+> 37musicstudio@0.1.0 lint
+> eslint .
+
+[2026-11-17 14:49:43 +07:00] EXIT_CODE [ESLint] = 0
+[2026-11-17 14:49:43 +07:00] 
+[2026-11-17 14:49:43 +07:00] ===== STAGE: Targeted booking/session unit tests =====
+
+> 37musicstudio@0.1.0 test:unit
+> vitest run --project unit tests/unit/bookingSessionLifecycle.test.js tests/unit/bookingSlotAndValidator.test.js
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/hazel/source/repos/37NewApp[39m
+
+ [32mΓ£ô[39m [30m[42m unit [49m[39m tests/unit/bookingSessionLifecycle.test.js [2m([22m[2m19 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32mΓ£ô[39m [30m[42m unit [49m[39m tests/unit/bookingSlotAndValidator.test.js [2m([22m[2m5 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m24 passed[39m[22m[90m (24)[39m
+[2m   Start at [22m 14:49:48
+[2m   Duration [22m 3.42s[2m (transform 253ms, setup 863ms, collect 1.49s, tests 113ms, environment 2.50s, prepare 422ms)[22m
+
+[2026-11-17 14:49:52 +07:00] EXIT_CODE [Targeted booking/session unit tests] = 0
+[2026-11-17 14:49:52 +07:00] 
+[2026-11-17 14:49:52 +07:00] ===== STAGE: Firestore Rules emulator tests =====
+
+> 37musicstudio@0.1.0 test:rules
+> firebase emulators:exec --only firestore "vitest run --project rules"
+
+[36m[1mi  emulators:[22m[39m Starting emulators: firestore
+[36m[1mi  firestore:[22m[39m Firestore Emulator logging to [1mfirestore-debug.log[22m
+[32m[1m+  firestore:[22m[39m Firestore Emulator was started in standard edition.
+[32m[1m+  firestore:[22m[39m Firestore Emulator UI websocket is running on 9150.
+[36m[1mi [22m[39m Running script: [1mvitest run --project rules[22m
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/hazel/source/repos/37NewApp[39m
+
+[90mstderr[2m | tests/rules/phase01.rules.test.js[2m > [22m[2mPhase 01 Firestore Security Rules (Deny-by-Default)[2m > [22m[2mdenies all unauthenticated reads and writes
+[22m[39m[2026-11-17T07:50:11.336Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x3b99b728 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L954, false for 'create' @ L1617, false for 'update' @ L958, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase01.rules.test.js[2m > [22m[2mPhase 01 Firestore Security Rules (Deny-by-Default)[2m > [22m[2menforces user profile isolation and blocks permission field injection in users/{uid}
+[22m[39m[2026-11-17T07:50:11.571Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x3b99b72b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L954:24 for 'create' @ L954, false for 'create' @ L1617, evaluation error at L958:24 for 'update' @ L958, false for 'update' @ L1617, false for 'create' @ L954, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase01.rules.test.js[2m > [22m[2mPhase 01 Firestore Security Rules (Deny-by-Default)[2m > [22m[2mallows atomic initial business + founder owner bootstrap and blocks rogue owner join
+[22m[39m[2026-11-17T07:50:11.983Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x3b99b72d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1007:26 for 'create' @ L1007, false for 'create' @ L1617, evaluation error at L1025:26 for 'update' @ L1025, false for 'update' @ L1617, false for 'create' @ L1007, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase01.rules.test.js[2m > [22m[2mPhase 01 Firestore Security Rules (Deny-by-Default)[2m > [22m[2menforces Owner vs Operator permissions, denies self-elevation, and keeps Phase 02+ collections locked
+[22m[39m[2026-11-17T07:50:12.365Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x3b99b730 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1025:26 for 'update' @ L1025, false for 'update' @ L1617, false for 'update' @ L1025, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase05.rules.test.js[2m > [22m[2mPhase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22m[2menforces recipient-only notification read, MapDiff readAt-only mark read, and anti-delete
+[22m[39m[2026-11-17T07:50:12.484Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x5bf058d8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1555:26 for 'update' @ L1555, false for 'update' @ L1617, false for 'update' @ L1555, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase05.rules.test.js[2m > [22m[2mPhase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22m[2menforces recipient-only notification read, MapDiff readAt-only mark read, and anti-delete
+[22m[39m[2026-11-17T07:50:12.511Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x5bf058d4 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1560, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase01.rules.test.js[2m > [22m[2mPhase 01 Firestore Security Rules (Deny-by-Default)[2m > [22m[2menforces Owner vs Operator permissions, denies self-elevation, and keeps Phase 02+ collections locked
+[22m[39m[2026-11-17T07:50:12.524Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x3b99b731 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1025:26 for 'update' @ L1025, false for 'update' @ L1617, false for 'update' @ L1025, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+ [32mΓ£ô[39m [30m[46m rules [49m[39m tests/rules/phase01.rules.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 10806[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 01 Firestore Security Rules (Deny-by-Default)[2m > [22mdenies all unauthenticated reads and writes [33m 1461[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 01 Firestore Security Rules (Deny-by-Default)[2m > [22mallows atomic initial business + founder owner bootstrap and blocks rogue owner join [33m 413[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 01 Firestore Security Rules (Deny-by-Default)[2m > [22menforces Owner vs Operator permissions, denies self-elevation, and keeps Phase 02+ collections locked [33m 864[2mms[22m[39m
+[90mstderr[2m | tests/rules/phase05.rules.test.js[2m > [22m[2mPhase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22m[2mconstrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[22m[39m[2026-11-17T07:50:12.868Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x5bf058da error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1537:26 for 'create' @ L1537, false for 'create' @ L1617, evaluation error at L1555:26 for 'update' @ L1555, false for 'update' @ L1617, false for 'create' @ L1537, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase05.rules.test.js[2m > [22m[2mPhase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22m[2mconstrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[22m[39m[2026-11-17T07:50:12.922Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x5bf058db error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1537:26 for 'create' @ L1537, false for 'create' @ L1617, evaluation error at L1555:26 for 'update' @ L1555, false for 'update' @ L1617, false for 'create' @ L1537, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase05.rules.test.js[2m > [22m[2mPhase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22m[2mconstrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[22m[39m[2026-11-17T07:50:12.963Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x5bf058dc error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1537:26 for 'create' @ L1537, false for 'create' @ L1617, evaluation error at L1555:26 for 'update' @ L1555, false for 'update' @ L1617, false for 'create' @ L1537, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase05.rules.test.js[2m > [22m[2mPhase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22m[2mconstrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[22m[39m[2026-11-17T07:50:13.391Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x5bf058e0 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1617, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+ [32mΓ£ô[39m [30m[46m rules [49m[39m tests/rules/phase05.rules.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 11330[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22menforces recipient-only notification read, MapDiff readAt-only mark read, and anti-delete [33m 2767[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration)[2m > [22mconstrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock [33m 879[2mms[22m[39m
+ [31mΓ¥»[39m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js [2m([22m[2m8 tests[22m[2m | [22m[31m7 failed[39m[2m)[22m[33m 15594[2mms[22m[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22mcreates booking + slot locks + operation marker atomically, releases them on cancel, and reclaims released slots only with a new booking[39m[33m 2735[2mms[22m[39m
+[31m     ΓåÆ 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+   [33m[2mΓ£ô[22m[39m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22mrejects an initial booking/session status mismatch even when the operation marker matches the written document [33m 339[2mms[22m[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22mdocuments the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set[39m[32m 233[2mms[22m[39m
+[31m     ΓåÆ 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22msupports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes[39m[33m 1034[2mms[22m[39m
+[31m     ΓåÆ 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1398, false for 'create' @ L1617, false for 'create' @ L1371, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22mrequires session markers for check-in/start/complete and preserves Finance handoff[39m[33m 308[2mms[22m[39m
+[31m     ΓåÆ 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22mcancels an already-started separate session without fabricating an end timestamp and releases owned slots[39m[32m 186[2mms[22m[39m
+[31m     ΓåÆ 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22menforces No-Show grace and releases the complete owned slot set atomically[39m[32m 267[2mms[22m[39m
+[31m     ΓåÆ 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1371, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m   [31m├ù[31m Phase 10 booking/session Firestore Rules & atomic transactions[2m > [22mserializes concurrent overlapping creates and validates reschedule slot swaps with operation markers[39m[33m 2895[2mms[22m[39m
+[31m     ΓåÆ expected [] to have a length of 1 but got +0[39m
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.230Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1053:26 for 'update' @ L1053, false for 'update' @ L1617, false for 'update' @ L1053, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.347Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc1 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1079:26 for 'update' @ L1079, false for 'update' @ L1617, false for 'update' @ L1079, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.376Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc5 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1079:26 for 'update' @ L1079, false for 'update' @ L1617, false for 'update' @ L1079, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.386Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1071, false for 'create' @ L1617, false for 'update' @ L1079, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.407Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1071:26 for 'create' @ L1071, false for 'create' @ L1617, evaluation error at L1079:26 for 'update' @ L1079, false for 'update' @ L1617, false for 'create' @ L1071, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.436Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1079:26 for 'update' @ L1079, false for 'update' @ L1617, false for 'update' @ L1079, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.455Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbc9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1090, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[22m[39m[2026-11-17T07:50:19.486Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbca error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1062, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.572Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6c6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1569:26 for 'create' @ L1569, false for 'create' @ L1617, evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'create' @ L1569, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.665Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6c8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1569:26 for 'create' @ L1569, false for 'create' @ L1617, evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'create' @ L1569, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mstrictly scopes studios to assignedStudioIds for Operators and dynamically reflects assignment revocation
+[22m[39m[2026-11-17T07:50:19.673Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbcd error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1125, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.696Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6c3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1569:26 for 'create' @ L1569, false for 'create' @ L1617, evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'create' @ L1569, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.719Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6c9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1569:26 for 'create' @ L1569, false for 'create' @ L1617, evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'create' @ L1569, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.770Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6c4 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1569:26 for 'create' @ L1569, false for 'create' @ L1617, evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'create' @ L1569, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2mstrictly scopes studios to assignedStudioIds for Operators and dynamically reflects assignment revocation
+[22m[39m[2026-11-17T07:50:19.809Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbcf error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1116:26 for 'update' @ L1116, false for 'update' @ L1617, false for 'update' @ L1116, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.849Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6ca error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'update' @ L1578, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.869Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6cb error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'update' @ L1578, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:19.919Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6cc error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1578:26 for 'update' @ L1578, false for 'update' @ L1617, false for 'update' @ L1578, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[22m[39m[2026-11-17T07:50:20.033Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbd2 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1134:26 for 'create' @ L1134, false for 'create' @ L1617, evaluation error at L1141:26 for 'update' @ L1141, false for 'update' @ L1617, false for 'create' @ L1134, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[22m[39m[2026-11-17T07:50:20.051Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbd3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1134:26 for 'create' @ L1134, false for 'create' @ L1617, evaluation error at L1141:26 for 'update' @ L1141, false for 'update' @ L1617, false for 'create' @ L1134, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[22m[39m[2026-11-17T07:50:20.107Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbd5 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1141:26 for 'update' @ L1141, false for 'update' @ L1617, false for 'update' @ L1141, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[22m[39m[2026-11-17T07:50:20.116Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbd6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1151, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase06.rules.test.js[2m > [22m[2mPhase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22m[2menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[22m[39m[2026-11-17T07:50:20.153Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x26b1e6cd error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1611, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+ [32mΓ£ô[39m [30m[46m rules [49m[39m tests/rules/phase06.rules.test.js [2m([22m[2m1 test[22m[2m)[22m[33m 4717[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 06 Firestore Security Rules ΓÇö Gallery Assets[2m > [22menforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete [33m 1427[2mms[22m[39m
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces customer permission boundaries (Owner full sans delete; permitted Operator active-only without archive)
+[22m[39m[2026-11-17T07:50:20.281Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbd9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1168:26 for 'update' @ L1168, false for 'update' @ L1617, false for 'update' @ L1168, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces customer permission boundaries (Owner full sans delete; permitted Operator active-only without archive)
+[22m[39m[2026-11-17T07:50:20.295Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbda error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1160:26 for 'create' @ L1160, false for 'create' @ L1617, evaluation error at L1168:26 for 'update' @ L1168, false for 'update' @ L1617, false for 'create' @ L1160, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces customer permission boundaries (Owner full sans delete; permitted Operator active-only without archive)
+[22m[39m[2026-11-17T07:50:20.332Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbdb error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1178, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[22m[39m[2026-11-17T07:50:20.442Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbdd error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1025:26 for 'update' @ L1025, false for 'update' @ L1617, false for 'update' @ L1025, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[22m[39m[2026-11-17T07:50:21.010Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbde error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1025:26 for 'update' @ L1025, false for 'update' @ L1617, false for 'update' @ L1025, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[22m[39m[2026-11-17T07:50:21.017Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbdf error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1035, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[22m[39m[2026-11-17T07:50:21.042Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbe0 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1007:26 for 'create' @ L1007, false for 'create' @ L1617, evaluation error at L1025:26 for 'update' @ L1025, false for 'update' @ L1617, false for 'create' @ L1007, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase02.rules.test.js[2m > [22m[2mPhase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22m[2menforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[22m[39m[2026-11-17T07:50:21.075Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x578acbe2 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1617, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+ [32mΓ£ô[39m [30m[46m rules [49m[39m tests/rules/phase02.rules.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 5763[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22mallows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads [33m 810[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22mstrictly scopes studios to assignedStudioIds for Operators and dynamically reflects assignment revocation [33m 399[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants)[2m > [22menforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections [33m 742[2mms[22m[39m
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2mexecutes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[22m[39m[2026-11-17T07:50:22.322Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b491302 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1221, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1617, false for 'update' @ L1221, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2mexecutes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[22m[39m[2026-11-17T07:50:22.367Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b491303 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1221, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1617, false for 'update' @ L1221, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2mexecutes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[22m[39m[2026-11-17T07:50:22.469Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b491308 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1497:26 for 'create' @ L1497, false for 'create' @ L1617, false for 'update' @ L1506, false for 'update' @ L1617, false for 'update' @ L1506, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2mexecutes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[22m[39m[2026-11-17T07:50:22.484Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b491309 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1221, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1617, false for 'update' @ L1221, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2menforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[22m[39m[2026-11-17T07:50:22.609Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b49130c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1506, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2menforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[22m[39m[2026-11-17T07:50:22.617Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b49130d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1506, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2menforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[22m[39m[2026-11-17T07:50:22.624Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b49130e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1526, false for 'update' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2menforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[22m[39m[2026-11-17T07:50:22.631Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b49130f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1526, false for 'delete' @ L1617
+System.Management.Automation.RemoteException
+[90mstderr[2m | tests/rules/phase04.rules.test.js[2m > [22m[2mPhase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22m[2menforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[22m[39m[2026-11-17T07:50:22.659Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x1b491310 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1497:26 for 'create' @ L1497, false for 'create' @ L1617, false for 'update' @ L1506, false for 'update' @ L1617, false for 'create' @ L1497, false for 'create' @ L1617
+System.Management.Automation.RemoteException
+ [32mΓ£ô[39m [30m[46m rules [49m[39m tests/rules/phase04.rules.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 2443[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22mexecutes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes [33m 721[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy)[2m > [22menforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks [33m 323[2mms[22m[39m
+ [32mΓ£ô[39m [30m[46m rules [49m[39m tests/rules/phase07.rules.test.js [2m([22m[2m1 test[22m[2m)[22m[33m 2121[2mms[22m[39m
+   [33m[2mΓ£ô[22m[39m Phase 07 Spark-Safe Analytics Queries ΓÇö Emulator Rules & Privacy Isolation[2m > [22mexecutes bounded Owner analytics queries and blocks cross-studio / ledger / other-operator leaks for Operators [33m 559[2mms[22m[39m
+System.Management.Automation.RemoteException
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m[1m[41m Failed Tests 7 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22mcreates booking + slot locks + operation marker atomically, releases them on cancel, and reclaims released slots only with a new booking
+[31m[1mFirebaseError[22m: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22mdocuments the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set
+[31m[1mFirebaseError[22m: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22msupports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes
+[31m[1mFirebaseError[22m[39m: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1398, false for 'create' @ L1617, false for 'create' @ L1371, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22mrequires session markers for check-in/start/complete and preserves Finance handoff
+[31m[1mFirebaseError[22m: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22mcancels an already-started separate session without fabricating an end timestamp and releases owned slots
+[31m[1mFirebaseError[22m: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22menforces No-Show grace and releases the complete owned slot set atomically
+[31m[1mFirebaseError[22m: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1617, evaluation error at L1398:26 for 'create' @ L1398, false for 'create' @ L1617, false for 'update' @ L1429, false for 'update' @ L1617, evaluation error at L1371:26 for 'create' @ L1371, false for 'create' @ L1617, false for 'update' @ L1384, false for 'update' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1371, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, false for 'create' @ L1318, false for 'create' @ L1617, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1195, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'create' @ L1617[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[6/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+[41m[1m FAIL [22m[49m [30m[46m rules [49m[39m tests/rules/phase03.rules.test.js[2m > [22mPhase 10 booking/session Firestore Rules & atomic transactions[2m > [22mserializes concurrent overlapping creates and validates reschedule slot swaps with operation markers
+[31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+System.Management.Automation.RemoteException
+[32m- Expected[39m
+[31m+ Received[39m
+System.Management.Automation.RemoteException
+[32m- 1[39m
+[31m+ 0[39m
+System.Management.Automation.RemoteException
+[36m [2mΓ¥»[22m tests/rules/phase03.rules.test.js:[2m953:77[22m[39m
+    [90m951| [39m      [34mattemptCreate[39m(opADb[33m,[39m [32m'bk-race-op'[39m[33m,[39m [33mOP_A_UID[39m[33m,[39m [32m'operator'[39m)[33m,[39m
+    [90m952| [39m    ])[33m;[39m
+    [90m953| [39m    expect([resOwner, resOp].filter((item) => item.status === 'fulfillΓÇª
+    [90m   | [39m                                                                            [31m^[39m
+    [90m954| [39m    expect([resOwner, resOp].filter((item) => item.status === 'rejecteΓÇª
+    [90m955| [39m
+System.Management.Automation.RemoteException
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[7/7]ΓÄ»[22m[39m
+System.Management.Automation.RemoteException
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m6 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m16 passed[39m[22m[90m (23)[39m
+[2m   Start at [22m 14:50:00
+[2m   Duration [22m 22.65s[2m (transform 308ms, setup 0ms, collect 5.37s, tests 52.77s, environment 2ms, prepare 2.42s)[22m
+
+[33m[1m! [22m[39m Script exited unsuccessfully (code 1)
+[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  firestore:[22m[39m Stopping Firestore Emulator
+[33m[1m! [22m[39m Firestore Emulator has exited upon receiving signal: SIGINT
+[36m[1mi  hub:[22m[39m Stopping emulator hub
+[36m[1mi  logging:[22m[39m Stopping Logging Emulator
+
+[1m[31mError:[39m[22m Script "[1mvitest run --project rules[22m" exited with code 1
+[2026-11-17 14:50:32 +07:00] EXIT_CODE [Firestore Rules emulator tests] = 0
+[2026-11-17 14:50:32 +07:00] 
+[2026-11-17 14:50:32 +07:00] ===== STAGE: Production build =====
+
+> 37musicstudio@0.1.0 build
+> vite build
+
+[36mvite v6.4.6 [32mbuilding for production...[36m[39m
+transforming...
+[33mnode_modules/zod/v4/core/regexes.js (74:0): A comment
+System.Management.Automation.RemoteException
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+System.Management.Automation.RemoteException
+in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.[39m
+[33mnode_modules/zod/v4/core/util.js (400:0): A comment
+System.Management.Automation.RemoteException
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+System.Management.Automation.RemoteException
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.[39m
+[32mΓ£ô[39m 3158 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                                         [39m[1m[2m  2.28 kB[22m[1m[22m[2m Γöé gzip:   0.94 kB[22m
+[2mdist/[22m[32massets/inter-latin-400-normal-C38fXH4l.woff2       [39m[1m[2m 23.66 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-500-normal-Cerq10X2.woff2       [39m[1m[2m 24.27 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-700-normal-Yt3aPRUw.woff2       [39m[1m[2m 24.36 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-600-normal-LgqL8muc.woff2       [39m[1m[2m 24.45 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-400-normal-CyCys3Eg.woff        [39m[1m[2m 30.70 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-600-normal-CiBQ2DWP.woff        [39m[1m[2m 31.26 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-500-normal-BL9OpVg8.woff        [39m[1m[2m 31.28 kB[22m[1m[22m
+[2mdist/[22m[32massets/inter-latin-700-normal-BLAVimhd.woff        [39m[1m[2m 31.32 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-400-normal-gapTbOY8.woff2  [39m[1m[2m 33.40 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-500-normal-uokXdC-Q.woff2  [39m[1m[2m 34.72 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-600-normal-DFOURf8L.woff2  [39m[1m[2m 35.29 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-700-normal-BmN9tIp5.woff2  [39m[1m[2m 35.48 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-400-normal-BOaIZNA2.woff   [39m[1m[2m 38.91 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-500-normal-CN2lyvyL.woff   [39m[1m[2m 40.52 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-600-normal-CA1yjETN.woff   [39m[1m[2m 41.20 kB[22m[1m[22m
+[2mdist/[22m[32massets/geist-sans-latin-700-normal-CjScfYeH.woff   [39m[1m[2m 41.40 kB[22m[1m[22m
+[2mdist/[22m[35massets/index-_zo5kw8X.css                          [39m[1m[2m 68.28 kB[22m[1m[22m[2m Γöé gzip:  12.78 kB[22m
+[2mdist/[22m[36massets/ModalDialog-V_GNe7eV.js                     [39m[1m[2m  1.21 kB[22m[1m[22m[2m Γöé gzip:   0.66 kB[22m
+[2mdist/[22m[36massets/SessionSecurityProfilePage-PfbcTrdc.js      [39m[1m[2m  3.48 kB[22m[1m[22m[2m Γöé gzip:   1.10 kB[22m
+[2mdist/[22m[36massets/OperatorRoutes-DNuV2dih.js                  [39m[1m[2m  3.85 kB[22m[1m[22m[2m Γöé gzip:   1.31 kB[22m
+[2mdist/[22m[36massets/OwnerRoutes-CYMMwHVQ.js                     [39m[1m[2m  4.43 kB[22m[1m[22m[2m Γöé gzip:   1.47 kB[22m
+[2mdist/[22m[36massets/OperatorCommissionsPage-C1NQ3c8G.js         [39m[1m[2m  4.65 kB[22m[1m[22m[2m Γöé gzip:   1.81 kB[22m
+[2mdist/[22m[36massets/ActivityTimelinePage-CJTwyKfy.js            [39m[1m[2m  5.42 kB[22m[1m[22m[2m Γöé gzip:   2.07 kB[22m
+[2mdist/[22m[36massets/masterDataUseCases-BfTdqC78.js              [39m[1m[2m  7.80 kB[22m[1m[22m[2m Γöé gzip:   2.86 kB[22m
+[2mdist/[22m[36massets/CustomersPage-CUEPcB8o.js                   [39m[1m[2m  9.02 kB[22m[1m[22m[2m Γöé gzip:   2.96 kB[22m
+[2mdist/[22m[36massets/financeRepository-4KwU1sR2.js               [39m[1m[2m  9.08 kB[22m[1m[22m[2m Γöé gzip:   2.81 kB[22m
+[2mdist/[22m[36massets/StudiosPage-BcRJe_9K.js                     [39m[1m[2m  9.58 kB[22m[1m[22m[2m Γöé gzip:   3.01 kB[22m
+[2mdist/[22m[36massets/TeamManagementPage-C2ixidOD.js              [39m[1m[2m 10.01 kB[22m[1m[22m[2m Γöé gzip:   3.30 kB[22m
+[2mdist/[22m[36massets/bookingStatusUi-mbsgtCto.js                 [39m[1m[2m 14.08 kB[22m[1m[22m[2m Γöé gzip:   4.14 kB[22m
+[2mdist/[22m[36massets/BusinessSettingsPage-93EciH7a.js            [39m[1m[2m 15.93 kB[22m[1m[22m[2m Γöé gzip:   3.91 kB[22m
+[2mdist/[22m[36massets/ServicesPricingPage-DOFvffvd.js             [39m[1m[2m 16.05 kB[22m[1m[22m[2m Γöé gzip:   4.70 kB[22m
+[2mdist/[22m[36massets/FinanceSettlementPage-BDwcV51k.js           [39m[1m[2m 28.85 kB[22m[1m[22m[2m Γöé gzip:   7.11 kB[22m
+[2mdist/[22m[36massets/GalleryPage-DgObNSaT.js                     [39m[1m[2m 32.20 kB[22m[1m[22m[2m Γöé gzip:   9.80 kB[22m
+[2mdist/[22m[36massets/ui-icons-BeKi096X.js                        [39m[1m[2m 36.90 kB[22m[1m[22m[2m Γöé gzip:   7.81 kB[22m
+[2mdist/[22m[36massets/BookingCalendarPage-ZZK5MSk-.js             [39m[1m[2m 66.59 kB[22m[1m[22m[2m Γöé gzip:  19.37 kB[22m
+[2mdist/[22m[36massets/index-BpKeLCNn.js                           [39m[1m[2m 76.02 kB[22m[1m[22m[2m Γöé gzip:  24.22 kB[22m
+[2mdist/[22m[36massets/ui-primitives-B2e4XTmc.js                   [39m[1m[2m 84.50 kB[22m[1m[22m[2m Γöé gzip:  26.56 kB[22m
+[2mdist/[22m[36massets/PortalShell-A7jJiXPu.js                     [39m[1m[2m115.28 kB[22m[1m[22m[2m Γöé gzip:  31.14 kB[22m
+[2mdist/[22m[36massets/ui-motion-B2LJzkVk.js                       [39m[1m[2m141.06 kB[22m[1m[22m[2m Γöé gzip:  48.08 kB[22m
+[2mdist/[22m[36massets/ui-forms-data-BCe3R1RA.js                   [39m[1m[2m151.02 kB[22m[1m[22m[2m Γöé gzip:  46.04 kB[22m
+[2mdist/[22m[36massets/firebase-core-hgK3uR3Y.js                   [39m[1m[2m251.01 kB[22m[1m[22m[2m Γöé gzip:  61.13 kB[22m
+[2mdist/[22m[36massets/firebase-firestore-DYyle2Xw.js              [39m[1m[2m267.83 kB[22m[1m[22m[2m Γöé gzip:  61.08 kB[22m
+[2mdist/[22m[36massets/react-vendor-BoOfFQo3.js                    [39m[1m[2m395.12 kB[22m[1m[22m[2m Γöé gzip: 129.26 kB[22m
+[32mΓ£ô built in 12.64s[39m
+[2026-11-17 14:50:47 +07:00] EXIT_CODE [Production build] = 0
+[2026-11-17 14:50:47 +07:00] 
+[2026-11-17 14:50:47 +07:00] ===== STAGE: Final Git status and HEAD =====
+## feature/phase-10-booking-session-lifecycle...origin/feature/phase-10-booking-session-lifecycle
+?? ui-foundation-verify-20261116-235201.txt
+?? verify-phase10-booking-rules-20261117-144350.txt
+?? verify-phase10-booking-rules-20261117-144520.txt
+?? verify-phase10-booking-rules-20261117-144937.txt
+?? verify-phase10-booking-session-v2.ps1
+?? verify-phase10-booking-session-v3.ps1
+?? verify-phase10-booking-session.ps1
+2e18cd6165f5f527e1d5eac6548e502020ca9694
+[2026-11-17 14:50:48 +07:00] EXIT_CODE [Final Git status and HEAD] = 0
+[2026-11-17 14:50:48 +07:00] 
+[2026-11-17 14:50:48 +07:00] ===== SUMMARY =====
+[2026-11-17 14:50:48 +07:00] OVERALL_RESULT = PASS
+[2026-11-17 14:50:48 +07:00] LOG_PATH = C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules-20261117-144937.txt
