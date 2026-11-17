@@ -73,13 +73,16 @@ service cloud.firestore {
         && (m.role == 'owner' || m.get(['permissions', 'canManageGallery'], false) == true);
     }
 
-    function canOperateStudioBooking(businessId, studioId) {
-      let m = getMemberDataIfPresent(businessId);
+    function canMemberOperateStudioBooking(m, studioId) {
       return isActiveMemberRecord(m)
         && (
           m.role == 'owner'
           || (m.get(['permissions', 'canManageBookings'], false) == true && studioId in m.assignedStudioIds)
         );
+    }
+
+    function canOperateStudioBooking(businessId, studioId) {
+      return canMemberOperateStudioBooking(getMemberDataIfPresent(businessId), studioId);
     }
 
     function bookingOperationPath(businessId, operationId) {
@@ -94,41 +97,33 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/bookingSessionEvents/$(eventId);
     }
 
-    function hasMatchingBookingOperationAfter(businessId, bookingId, studioId, data, operationType) {
-      let operationId = data.get('lastOperationId', null);
-      let operationPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
-      let operationExists = operationId is string && existsAfter(operationPath);
-      let operationData = operationExists ? getAfter(operationPath).data : {};
-      let memberData = currentMember(businessId);
-      return operationExists
-        && operationData.operationId == operationId
-        && operationData.businessId == businessId
-        && operationData.bookingId == bookingId
-        && operationData.studioId == studioId
-        && operationData.operationType == operationType
-        && operationData.actorUid == request.auth.uid
-        && operationData.actorRole == memberData.role
-        && operationData.requestId is string
-        && operationData.payloadHash == data.get('lastOperationPayloadHash', null);
+    function hasMatchingBookingOperationAfter(businessId, bookingId, studioId, data, operationType, actorRole) {
+      let operationId = 'lastOperationId' in data ? data.lastOperationId : '__invalid__';
+      let opPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
+      let opExists = operationId is string && existsAfter(opPath);
+      let opData = opExists ? getAfter(opPath).data : {};
+      return opExists
+        && opData.bookingId == bookingId
+        && opData.studioId == studioId
+        && opData.operationType == operationType
+        && opData.actorUid == request.auth.uid
+        && opData.actorRole == actorRole
+        && opData.payloadHash == ('lastOperationPayloadHash' in data ? data.lastOperationPayloadHash : null);
     }
 
-    function hasMatchingBookingSessionEventAfter(businessId, bookingId, studioId, data, fromStatus) {
-      let eventId = data.get('lastSessionEventId', null);
-      let eventPath = bookingSessionEventPath(businessId, eventId is string ? eventId : '__invalid__');
-      let eventExists = eventId is string && existsAfter(eventPath);
+    function hasMatchingBookingSessionEventAfter(businessId, bookingId, studioId, data, fromStatus, actorRole) {
+      let eventId = data.lastSessionEventId;
+      let eventPath = bookingSessionEventPath(businessId, eventId);
+      let eventExists = existsAfter(eventPath);
       let eventData = eventExists ? getAfter(eventPath).data : {};
-      let memberData = currentMember(businessId);
       return eventExists
-        && eventData.eventId == eventId
-        && eventData.operationId == eventId
-        && eventData.businessId == businessId
         && eventData.bookingId == bookingId
         && eventData.studioId == studioId
-        && eventData.action == data.get('lastSessionEventType', null)
+        && eventData.action == data.lastSessionEventType
         && eventData.fromStatus == fromStatus
         && eventData.toStatus == data.sessionStatus
         && eventData.actorUid == request.auth.uid
-        && eventData.actorRole == memberData.role;
+        && eventData.actorRole == actorRole;
     }
     // The booking write is the authorization boundary for slot writes.
     // Its rule already validates membership/studio scope and the operation marker.
@@ -139,7 +134,7 @@ service cloud.firestore {
       return bookingData.studioId == slotData.studioId
         && bookingData.dateKey == slotData.dateKey
         && bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-        && bookingData.slotIds.hasAny([slotId])
+        && slotId in bookingData.slotIds
         && bookingData.lastOperationType in operationTypes
         && bookingData.updatedBy == request.auth.uid
         && bookingData.updatedAt == request.time;
@@ -153,11 +148,13 @@ service cloud.firestore {
         && (
           (
             bookingData.status in ['CANCELLED', 'REJECTED', 'NO_SHOW']
-            && bookingData.slotIds.hasAny([slotId])
+            && bookingData.lastOperationType in ['booking.session', 'booking.decision']
+            && slotId in bookingData.slotIds
           )
           || (
             bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-            && !bookingData.slotIds.hasAny([slotId])
+            && bookingData.lastOperationType == 'booking.reschedule'
+            && !(slotId in bookingData.slotIds)
           )
         );
     }
@@ -547,6 +544,26 @@ service cloud.firestore {
         && data.schemaVersion >= 1;
     }
 
+    function hasNoSessionFieldsOnCreate(data) {
+      return (!('checkedInAt' in data) || data.checkedInAt == null)
+        && (!('checkedInByUid' in data) || data.checkedInByUid == null)
+        && (!('actualStartAt' in data) || data.actualStartAt == null)
+        && (!('actualStartByUid' in data) || data.actualStartByUid == null)
+        && (!('actualEndAt' in data) || data.actualEndAt == null)
+        && (!('actualEndByUid' in data) || data.actualEndByUid == null)
+        && (!('actualDurationMinutes' in data) || data.actualDurationMinutes == null)
+        && (!('noShowAt' in data) || data.noShowAt == null)
+        && (!('noShowByUid' in data) || data.noShowByUid == null)
+        && (!('lastSessionEventId' in data) || data.lastSessionEventId == null)
+        && (!('lastSessionEventAt' in data) || data.lastSessionEventAt == null)
+        && (!('lastSessionEventType' in data) || data.lastSessionEventType == null)
+        && (!('cancelledAt' in data) || data.cancelledAt == null)
+        && (!('cancelledBy' in data) || data.cancelledBy == null)
+        && (!('cancelReason' in data) || data.cancelReason == null)
+        && (!('completedAt' in data) || data.completedAt == null)
+        && (!('settlement' in data) || data.settlement == null);
+    }
+
     function isValidBookingData(data, businessId, bookingId) {
       return data.keys().hasOnly([
           'bookingId', 'businessId', 'studioId', 'serviceId', 'customerId', 'operatorUid',
@@ -566,7 +583,6 @@ service cloud.firestore {
         ])
         && data.bookingId == bookingId
         && data.businessId == businessId
-        && data.studioId is string && data.studioId.size() >= 1
         && data.serviceId is string && data.serviceId.size() >= 1
         && data.customerId is string && data.customerId.size() >= 1
         && isValidNullableString(data, 'operatorUid', 128)
@@ -580,197 +596,234 @@ service cloud.firestore {
         && data.endAt is timestamp
         && data.endAt > data.startAt
         && data.slotIds is list && data.slotIds.size() >= 1 && data.slotIds.size() <= 96
-        && data.status in [
-          'PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS',
-          'COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW', 'SETTLED',
-          'CANCELLED', 'NO_SHOW', 'REJECTED'
-        ]
-        && (!('sessionStatus' in data) || data.sessionStatus in [
-          'PENDING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED'
-        ])
-        && isValidNullableString(data, 'checkedInByUid', 128)
-        && isValidNullableString(data, 'checkedInByName', 120)
-        && isValidNullableString(data, 'actualStartByUid', 128)
-        && isValidNullableString(data, 'actualStartByName', 120)
-        && isValidNullableString(data, 'actualEndByUid', 128)
-        && isValidNullableString(data, 'actualEndByName', 120)
-        && isValidNullableString(data, 'noShowByUid', 128)
-        && isValidNullableString(data, 'noShowByName', 120)
-        && isValidNullableString(data, 'noShowReason', 300)
-        && isValidNullableString(data, 'lastSessionEventId', 180)
-        && isValidNullableString(data, 'lastSessionEventType', 30)
-        && isValidNullableString(data, 'lastOperationId', 180)
-        && isValidNullableString(data, 'lastOperationType', 40)
-        && isValidNullableString(data, 'lastOperationPayloadHash', 64)
-        && (!('actualDurationMinutes' in data) || data.actualDurationMinutes == null || (data.actualDurationMinutes is int && data.actualDurationMinutes >= 0 && data.actualDurationMinutes <= 10080))
-        && (!('checkedInAt' in data) || data.checkedInAt == null || data.checkedInAt is timestamp)
-        && (!('actualStartAt' in data) || data.actualStartAt == null || data.actualStartAt is timestamp)
-        && (!('actualEndAt' in data) || data.actualEndAt == null || data.actualEndAt is timestamp)
-        && (!('noShowAt' in data) || data.noShowAt == null || data.noShowAt is timestamp)
-        && (!('lastSessionEventAt' in data) || data.lastSessionEventAt == null || data.lastSessionEventAt is timestamp)
-        && (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp)
-        && (
-          !('lastOperationId' in data)
-          || (
-            data.lastOperationId is string && data.lastOperationId.size() > 0
-            && data.lastOperationType in ['booking.create', 'booking.decision', 'booking.reschedule', 'booking.session']
-            && data.lastOperationPayloadHash is string
-            && data.lastOperationPayloadHash.matches('^[a-f0-9]{16,64}$')
-          )
-        )
+        && hasNoSessionFieldsOnCreate(data)
+        && data.lastOperationId is string && data.lastOperationId.size() > 0
+        && data.lastOperationType == 'booking.create'
+        && data.lastOperationPayloadHash is string
+        && data.lastOperationPayloadHash.matches('^[a-f0-9]{16,64}$')
         && data.studioSnapshot is map
         && data.serviceSnapshot is map
         && data.customerSnapshot is map
-        && data.priceSnapshot is map
-        && data.priceSnapshot.currency == 'IDR'
+        && data.priceSnapshot is map && data.priceSnapshot.currency == 'IDR'
         && data.priceSnapshot.totalMinor is int && data.priceSnapshot.totalMinor >= 0
         && data.priceSnapshot.discountMinor is int && data.priceSnapshot.discountMinor >= 0
-        && data.commissionSnapshot is map
-        && data.commissionSnapshot.currency == 'IDR'
+        && data.commissionSnapshot is map && data.commissionSnapshot.currency == 'IDR'
         && data.commissionSnapshot.amountMinor is int && data.commissionSnapshot.amountMinor >= 0
-        && (!('settlement' in data) || data.settlement == null || data.settlement is map)
         && isValidNullableString(data, 'notes', 500)
-        && isValidNullableString(data, 'cancelReason', 300)
-        && isValidNullableString(data, 'cancelledBy', 128)
-        && data.rescheduleCount is int && data.rescheduleCount >= 0
         && data.schemaVersion is int && data.schemaVersion >= 1;
     }
 
-    function isValidBookingSessionUpdate(businessId, bookingId, oldData, newData) {
-      let fromSessionStatus = oldData.get(
-        'sessionStatus',
-        oldData.status == 'PENDING_CONFIRMATION'
-          ? 'PENDING'
-          : oldData.status == 'IN_PROGRESS'
-            ? 'IN_PROGRESS'
-            : oldData.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW', 'SETTLED']
-              ? 'COMPLETED'
-              : oldData.status == 'NO_SHOW'
-                ? 'NO_SHOW'
-                : oldData.status in ['CANCELLED', 'REJECTED']
-                  ? 'CANCELLED'
-                  : 'UPCOMING'
-      );
-      return canOperateStudioBooking(businessId, oldData.studioId)
-        && newData.updatedBy == request.auth.uid
-        && newData.updatedAt == request.time
-        && newData.lastOperationType == 'booking.session'
+    function deriveFromSessionStatus(oldData) {
+      return 'sessionStatus' in oldData ? oldData.sessionStatus
+        : (oldData.status == 'PENDING_CONFIRMATION' ? 'PENDING'
+          : (oldData.status == 'IN_PROGRESS' ? 'IN_PROGRESS' : 'UPCOMING'));
+    }
+
+    function isValidCompleteSessionUpdate(oldData, newData, extraKeys) {
+      let expectedMinutes = math.floor((request.time.toMillis() - oldData.actualStartAt.toMillis()) / 60000);
+      return 'actualStartAt' in oldData && oldData.actualStartAt is timestamp
+        && request.time >= oldData.actualStartAt
+        && newData.status == 'COMPLETED_PENDING_SETTLEMENT'
+        && newData.sessionStatus == 'COMPLETED'
+        && newData.completedAt == request.time
+        && newData.actualDurationMinutes is int
+        && newData.actualDurationMinutes >= expectedMinutes - 1
+        && newData.actualDurationMinutes <= expectedMinutes + 1
+        && newData.actualDurationMinutes <= 10080
+        && extraKeys.hasOnly([
+          'status', 'actualEndAt', 'actualEndByUid', 'actualEndByName',
+          'actualDurationMinutes', 'completedAt'
+        ]);
+    }
+
+    function isValidBookingSessionUpdate(businessId, bookingId, oldData, newData, m, changed) {
+      let action = newData.lastSessionEventType;
+      let fromSessionStatus = deriveFromSessionStatus(oldData);
+      let extraKeys = changed.difference([
+        'sessionStatus', 'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
+        'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+      ].toSet());
+      let stampPrefix = action == 'check_in' ? 'checkedIn'
+        : (action == 'start' ? 'actualStart'
+          : (action == 'complete' ? 'actualEnd' : 'noShow'));
+      return action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject']
         && newData.lastOperationId == newData.lastSessionEventId
         && newData.lastOperationPayloadHash is string
         && newData.lastSessionEventAt == request.time
-        && hasMatchingBookingOperationAfter(businessId, bookingId, oldData.studioId, newData, 'booking.session')
-        && hasMatchingBookingSessionEventAfter(businessId, bookingId, oldData.studioId, newData, fromSessionStatus)
+        && hasMatchingBookingSessionEventAfter(businessId, bookingId, oldData.studioId, newData, fromSessionStatus, m.role)
         && (
           (
-            newData.lastSessionEventType == 'check_in'
-            && oldData.status == 'CONFIRMED'
-            && fromSessionStatus == 'UPCOMING'
-            && newData.status == oldData.status
-            && newData.sessionStatus == 'UPCOMING'
-            && oldData.get('checkedInAt', null) == null
-            && newData.checkedInAt == request.time
-            && newData.checkedInByUid == request.auth.uid
-            && newData.checkedInByName is string
-            && newData.diff(oldData).affectedKeys().hasOnly([
-              'sessionStatus', 'checkedInAt', 'checkedInByUid', 'checkedInByName',
-              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
+            oldData.status == 'CONFIRMED'
+            && action in ['check_in', 'start', 'complete', 'no_show']
+            && newData[stampPrefix + 'At'] == request.time
+            && newData[stampPrefix + 'ByUid'] == request.auth.uid
+            && newData[stampPrefix + 'ByName'] is string
+            && (
+              (
+                fromSessionStatus == 'UPCOMING'
+                && !('checkedInAt' in oldData && oldData.checkedInAt != null && action != 'start')
+                && (
+                  (
+                    action == 'check_in'
+                    && newData.status == 'CONFIRMED'
+                    && newData.sessionStatus == 'UPCOMING'
+                    && extraKeys.hasOnly(['checkedInAt', 'checkedInByUid', 'checkedInByName'])
+                  )
+                  || (
+                    action == 'start'
+                    && newData.status == 'CONFIRMED'
+                    && newData.sessionStatus == 'IN_PROGRESS'
+                    && !('actualStartAt' in oldData && oldData.actualStartAt != null)
+                    && extraKeys.hasOnly(['actualStartAt', 'actualStartByUid', 'actualStartByName'])
+                  )
+                  || (
+                    action == 'no_show'
+                    && oldData.startAt is timestamp
+                    && request.time >= oldData.startAt + duration.value(15, 'm')
+                    && newData.status == 'NO_SHOW'
+                    && newData.sessionStatus == 'NO_SHOW'
+                    && newData.noShowReason is string && newData.noShowReason.size() >= 4
+                    && extraKeys.hasOnly(['status', 'noShowAt', 'noShowByUid', 'noShowByName', 'noShowReason'])
+                  )
+                )
+              )
+              || (
+                action == 'complete'
+                && fromSessionStatus == 'IN_PROGRESS'
+                && isValidCompleteSessionUpdate(oldData, newData, extraKeys)
+              )
+            )
           )
           || (
-            newData.lastSessionEventType == 'start'
-            && oldData.status == 'CONFIRMED'
-            && fromSessionStatus == 'UPCOMING'
-            && newData.status == oldData.status
-            && newData.sessionStatus == 'IN_PROGRESS'
-            && oldData.get('actualStartAt', null) == null
-            && newData.actualStartAt == request.time
-            && newData.actualStartByUid == request.auth.uid
-            && newData.actualStartByName is string
-            && newData.diff(oldData).affectedKeys().hasOnly([
-              'sessionStatus', 'actualStartAt', 'actualStartByUid', 'actualStartByName',
-              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
-          )
-          || (
-            newData.lastSessionEventType == 'complete'
-            && oldData.status == 'CONFIRMED'
-            && fromSessionStatus == 'IN_PROGRESS'
-            && oldData.get('actualStartAt', null) is timestamp
-            && request.time >= oldData.actualStartAt
-            && newData.status == 'COMPLETED_PENDING_SETTLEMENT'
-            && newData.sessionStatus == 'COMPLETED'
-            && newData.actualEndAt == request.time
-            && newData.actualEndByUid == request.auth.uid
-            && newData.actualEndByName is string
-            && newData.completedAt == request.time
-            && newData.actualDurationMinutes is int
-            && newData.actualDurationMinutes >= math.floor((request.time.toMillis() - oldData.actualStartAt.toMillis()) / 60000) - 1
-            && newData.actualDurationMinutes <= math.floor((request.time.toMillis() - oldData.actualStartAt.toMillis()) / 60000) + 1
-            && newData.actualDurationMinutes <= 10080
-            && newData.diff(oldData).affectedKeys().hasOnly([
-              'status', 'sessionStatus', 'actualEndAt', 'actualEndByUid', 'actualEndByName',
-              'actualDurationMinutes', 'completedAt',
-              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
-          )
-          || (
-            newData.lastSessionEventType == 'no_show'
-            && oldData.status == 'CONFIRMED'
-            && fromSessionStatus == 'UPCOMING'
-            && oldData.get('checkedInAt', null) == null
-            && oldData.startAt is timestamp
-            && request.time >= oldData.startAt + duration.value(15, 'm')
-            && newData.status == 'NO_SHOW'
-            && newData.sessionStatus == 'NO_SHOW'
-            && newData.noShowAt == request.time
-            && newData.noShowByUid == request.auth.uid
-            && newData.noShowByName is string
-            && newData.noShowReason is string
-            && newData.noShowReason.size() >= 4
-            && newData.diff(oldData).affectedKeys().hasOnly([
-              'status', 'sessionStatus', 'noShowAt', 'noShowByUid', 'noShowByName', 'noShowReason',
-              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
-          )
-          || (
-            newData.lastSessionEventType == 'cancel'
-            && oldData.status in ['PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS']
-            && fromSessionStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
-            && newData.status == 'CANCELLED'
-            && newData.sessionStatus == 'CANCELLED'
-            && newData.cancelReason is string
-            && newData.cancelReason.size() >= 3
+            action in ['cancel', 'reject']
+            && newData.cancelReason is string && newData.cancelReason.size() >= 3
             && newData.cancelledBy == request.auth.uid
             && newData.cancelledAt == request.time
-            && newData.get('actualStartAt', null) == oldData.get('actualStartAt', null)
-            && newData.get('actualStartByUid', null) == oldData.get('actualStartByUid', null)
-            && newData.get('actualStartByName', null) == oldData.get('actualStartByName', null)
-            && newData.diff(oldData).affectedKeys().hasOnly([
-              'status', 'sessionStatus', 'cancelReason', 'cancelledBy', 'cancelledAt',
-              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
+            && newData.sessionStatus == 'CANCELLED'
+            && extraKeys.hasOnly(['status', 'cancelReason', 'cancelledBy', 'cancelledAt'])
+            && (
+              (
+                action == 'cancel'
+                && oldData.status in ['PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS']
+                && fromSessionStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
+                && newData.status == 'CANCELLED'
+              )
+              || (
+                action == 'reject'
+                && oldData.status == 'PENDING_CONFIRMATION'
+                && fromSessionStatus == 'PENDING'
+                && newData.status == 'REJECTED'
+              )
+            )
+          )
+        );
+    }
+
+    function canOperateStudioBookingForCreate(businessId, bookingId, data) {
+      let m = getMemberDataIfPresent(businessId);
+      let studioId = 'studioId' in data ? data.studioId : '';
+      return studioId is string
+        && studioId.size() >= 1
+        && canMemberOperateStudioBooking(m, studioId)
+        && 'createdBy' in data && data.createdBy == request.auth.uid
+        && 'updatedBy' in data && data.updatedBy == request.auth.uid
+        && 'createdAt' in data && data.createdAt == request.time
+        && 'updatedAt' in data && data.updatedAt == request.time
+        && 'status' in data && data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+        && hasMatchingBookingOperationAfter(businessId, bookingId, studioId, data, 'booking.create', m.role)
+        && isValidBookingData(data, businessId, bookingId)
+        && data.sessionStatus == (data.status == 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING')
+        && data.rescheduleCount == 0
+        && exists(studioPath(businessId, studioId))
+        && get(studioPath(businessId, studioId)).data.status == 'active'
+        && (
+          data.priceSnapshot.discountMinor == 0
+          || m.role == 'owner'
+          || (
+            m.get(['permissions', 'canApplyDiscount'], false) == true
+            && exists(settingPath(businessId, 'pricing'))
+            && get(settingPath(businessId, 'pricing')).data.allowOperatorDiscount == true
+          )
+        );
+    }
+
+    function canConfirmPendingBooking(oldData, newData, changed) {
+      return oldData.status == 'PENDING_CONFIRMATION'
+        && newData.status == 'CONFIRMED'
+        && ('sessionStatus' in newData && newData.sessionStatus == 'UPCOMING')
+        && changed.hasOnly([
+          'status', 'sessionStatus', 'lastOperationId', 'lastOperationType',
+          'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
+        ]);
+    }
+
+    function canRescheduleActiveBooking(oldData, newData, changed) {
+      return oldData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+        && newData.status == oldData.status
+        && newData.rescheduleCount == oldData.rescheduleCount + 1
+        && newData.endAt > newData.startAt
+        && newData.slotIds is list
+        && newData.slotIds.size() >= 1
+        && newData.slotIds.size() <= 96
+        && changed.hasOnly([
+          'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
+          'bufferMinutes', 'startAt', 'endAt', 'slotIds',
+          'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
+          'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
+        ])
+        && (
+          newData.durationMinutes != oldData.durationMinutes
+          || (
+            newData.priceSnapshot == oldData.priceSnapshot
+            && newData.commissionSnapshot == oldData.commissionSnapshot
+          )
+        );
+    }
+
+    function canSettleBooking(businessId, bookingId, oldData, newData, changed) {
+      let ledgerId = 'settlement_payment__' + bookingId;
+      let commId = 'commission_earned__' + bookingId;
+      return changed.hasOnly([
+          'status', 'settlement', 'updatedBy', 'updatedAt'
+        ])
+        && (
+          (
+            oldData.status == 'COMPLETED_PENDING_SETTLEMENT'
+            && newData.status == 'SETTLEMENT_REVIEW'
           )
           || (
-            newData.lastSessionEventType == 'reject'
-            && oldData.status == 'PENDING_CONFIRMATION'
-            && fromSessionStatus == 'PENDING'
-            && newData.status == 'REJECTED'
-            && newData.sessionStatus == 'CANCELLED'
-            && newData.cancelReason is string
-            && newData.cancelReason.size() >= 3
-            && newData.cancelledBy == request.auth.uid
-            && newData.cancelledAt == request.time
-            && newData.diff(oldData).affectedKeys().hasOnly([
-              'status', 'sessionStatus', 'cancelReason', 'cancelledBy', 'cancelledAt',
-              'lastSessionEventId', 'lastSessionEventAt', 'lastSessionEventType',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
+            oldData.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
+            && newData.status == 'SETTLED'
+            && 'settlement' in newData && newData.settlement is map
+            && newData.settlement.paidAmountMinor is int
+            && newData.settlement.paidAmountMinor >= 0
+            && newData.settlement.ledgerEntryId == ledgerId
+            && newData.settlement.commissionEntryId == commId
+            && existsAfter(ledgerEntryPath(businessId, ledgerId))
+            && existsAfter(commissionEntryPath(businessId, commId))
           )
+        );
+    }
+
+    function canUpdateBooking(businessId, bookingId, oldData, newData) {
+      let m = getMemberDataIfPresent(businessId);
+      let opType = 'lastOperationType' in newData ? newData.lastOperationType : null;
+      let changed = newData.diff(oldData).affectedKeys();
+      return isActiveMemberRecord(m)
+        && newData.updatedBy == request.auth.uid
+        && newData.updatedAt == request.time
+        && (
+          (
+            opType in ['booking.session', 'booking.decision', 'booking.reschedule']
+            && (m.role == 'owner' || (m.get(['permissions', 'canManageBookings'], false) == true && oldData.studioId in m.assignedStudioIds))
+            && hasMatchingBookingOperationAfter(businessId, bookingId, oldData.studioId, newData, opType, m.role)
+            && (
+              (opType == 'booking.session' && isValidBookingSessionUpdate(businessId, bookingId, oldData, newData, m, changed))
+              || (opType == 'booking.decision' && canConfirmPendingBooking(oldData, newData, changed))
+              || (opType == 'booking.reschedule' && canRescheduleActiveBooking(oldData, newData, changed))
+            )
+          )
+          || (m.role == 'owner' && canSettleBooking(businessId, bookingId, oldData, newData, changed))
         );
     }
 
@@ -795,7 +848,7 @@ service cloud.firestore {
         && data.schemaVersion is int
         && data.schemaVersion >= 1;
     }
-    function isValidActivityLogData(data, businessId, eventId) {
+    function isValidActivityLogData(data, businessId, eventId, actorRole) {
       return data.keys().hasOnly([
           'eventId', 'businessId', 'studioId', 'eventType', 'entityType', 'entityId',
           'operationId', 'actorUid', 'actorRole', 'beforeStatus', 'afterStatus',
@@ -813,12 +866,103 @@ service cloud.firestore {
           'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
         ]
         && data.actorUid == request.auth.uid
-        && data.actorRole == currentMember(businessId).role
+        && data.actorRole == actorRole
         && isValidNullableString(data, 'beforeStatus', 60)
         && data.afterStatus is string && data.afterStatus.size() >= 1
         && isValidNullableString(data, 'reason', 300)
         && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300
         && data.schemaVersion is int && data.schemaVersion >= 1;
+    }
+
+    function canCreateActivityLog(businessId, eventId, data) {
+      let m = getMemberDataIfPresent(businessId);
+      return canMemberOperateStudioBooking(m, data.studioId)
+        && isValidActivityLogData(data, businessId, eventId, m.role)
+        && (
+          m.role == 'owner'
+          || (
+            data.entityType == 'booking'
+            && !(data.eventType in [
+              'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
+            ])
+          )
+        )
+        && data.createdAt == request.time;
+    }
+
+    function canCreateBookingOperation(businessId, operationId, data) {
+      let m = getMemberDataIfPresent(businessId);
+      return canMemberOperateStudioBooking(m, data.studioId)
+        && data.keys().hasOnly([
+          'operationId', 'requestId', 'payloadHash', 'operationType', 'action',
+          'businessId', 'bookingId', 'studioId', 'actorUid', 'actorRole',
+          'resultBookingStatus', 'resultSessionStatus', 'schemaVersion', 'createdAt'
+        ])
+        && data.operationId == operationId
+        && data.businessId == businessId
+        && data.bookingId is string
+        && data.studioId is string
+        && data.operationType in ['booking.create', 'booking.decision', 'booking.reschedule', 'booking.session']
+        && (
+          (data.operationType == 'booking.create' && data.action == 'create')
+          || (data.operationType == 'booking.decision' && data.action == 'decision:CONFIRMED')
+          || (data.operationType == 'booking.reschedule' && data.action == 'reschedule')
+          || (data.operationType == 'booking.session' && data.action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject'])
+        )
+        && data.actorUid == request.auth.uid
+        && data.actorRole == m.role
+        && data.requestId is string
+        && data.requestId.size() >= 8
+        && data.requestId.size() <= 128
+        && data.payloadHash is string
+        && data.payloadHash.matches('^[a-f0-9]{16,64}$')
+        && data.resultBookingStatus is string
+        && data.resultSessionStatus is string
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1
+        && data.createdAt == request.time
+        && hasMatchingBookingOperationDocumentAfter(businessId, operationId, data);
+    }
+
+    function canCreateBookingSessionEvent(businessId, eventId, data) {
+      let m = getMemberDataIfPresent(businessId);
+      return canMemberOperateStudioBooking(m, data.studioId)
+        && data.keys().hasOnly([
+          'eventId', 'businessId', 'bookingId', 'studioId', 'action',
+          'fromStatus', 'toStatus', 'actorUid', 'actorRole', 'actorName',
+          'reason', 'operationId', 'requestId', 'payloadHash', 'schemaVersion', 'createdAt'
+        ])
+        && data.eventId == eventId
+        && data.operationId == eventId
+        && data.businessId == businessId
+        && data.bookingId is string
+        && data.studioId is string
+        && data.action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject']
+        && data.fromStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
+        && data.toStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED']
+        && (
+          (data.action == 'check_in' && data.fromStatus == 'UPCOMING' && data.toStatus == 'UPCOMING')
+          || (data.action == 'start' && data.fromStatus == 'UPCOMING' && data.toStatus == 'IN_PROGRESS')
+          || (data.action == 'complete' && data.fromStatus == 'IN_PROGRESS' && data.toStatus == 'COMPLETED')
+          || (data.action == 'no_show' && data.fromStatus == 'UPCOMING' && data.toStatus == 'NO_SHOW')
+          || (data.action == 'cancel' && data.fromStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS'] && data.toStatus == 'CANCELLED')
+          || (data.action == 'reject' && data.fromStatus == 'PENDING' && data.toStatus == 'CANCELLED')
+        )
+        && data.actorUid == request.auth.uid
+        && data.actorRole == m.role
+        && data.actorName is string
+        && data.actorName.size() >= 1
+        && data.actorName.size() <= 120
+        && isValidNullableString(data, 'reason', 300)
+        && data.requestId is string
+        && data.requestId.size() >= 8
+        && data.requestId.size() <= 128
+        && data.payloadHash is string
+        && data.payloadHash.matches('^[a-f0-9]{16,64}$')
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1
+        && data.createdAt == request.time
+        && hasMatchingBookingSessionEventDocumentAfter(businessId, eventId, data);
     }
 
     function isValidLedgerEntryData(data, businessId, entryId) {
@@ -1171,98 +1315,9 @@ service cloud.firestore {
             )
           );
 
-        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
-          && isValidBookingData(request.resource.data, businessId, bookingId)
-          && request.resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-          && request.resource.data.sessionStatus == (
-            request.resource.data.status == 'PENDING_CONFIRMATION' ? 'PENDING' : 'UPCOMING'
-          )
-          && request.resource.data.rescheduleCount == 0
-          && exists(studioPath(businessId, request.resource.data.studioId))
-          && get(studioPath(businessId, request.resource.data.studioId)).data.status == 'active'
-          && (
-            request.resource.data.priceSnapshot.discountMinor == 0
-            || isOwner(businessId)
-            || (
-              currentMember(businessId).get(['permissions', 'canApplyDiscount'], false) == true
-              && exists(settingPath(businessId, 'pricing'))
-              && get(settingPath(businessId, 'pricing')).data.allowOperatorDiscount == true
-            )
-          )
-          && request.resource.data.createdBy == request.auth.uid
-          && request.resource.data.updatedBy == request.auth.uid
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && request.resource.data.lastOperationType == 'booking.create'
-          && hasMatchingBookingOperationAfter(businessId, bookingId, request.resource.data.studioId, request.resource.data, 'booking.create');
+        allow create: if canOperateStudioBookingForCreate(businessId, bookingId, request.resource.data);
 
-        allow update: if isValidBookingSessionUpdate(businessId, bookingId, resource.data, request.resource.data)
-          || (
-            canOperateStudioBooking(businessId, resource.data.studioId)
-            && resource.data.status == 'PENDING_CONFIRMATION'
-            && request.resource.data.status == 'CONFIRMED'
-            && request.resource.data.sessionStatus == 'UPCOMING'
-            && request.resource.data.lastOperationType == 'booking.decision'
-            && request.resource.data.updatedBy == request.auth.uid
-            && request.resource.data.updatedAt == request.time
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'sessionStatus', 'lastOperationId', 'lastOperationType',
-              'lastOperationPayloadHash', 'updatedBy', 'updatedAt'
-            ])
-            && hasMatchingBookingOperationAfter(businessId, bookingId, resource.data.studioId, request.resource.data, 'booking.decision')
-          )
-          || (
-            canOperateStudioBooking(businessId, resource.data.studioId)
-            && resource.data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-            && request.resource.data.status == resource.data.status
-            && request.resource.data.rescheduleCount == resource.data.rescheduleCount + 1
-            && request.resource.data.lastOperationType == 'booking.reschedule'
-            && request.resource.data.updatedBy == request.auth.uid
-            && request.resource.data.updatedAt == request.time
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'dateKey', 'timezone', 'startTime', 'endTime', 'durationMinutes',
-              'bufferMinutes', 'startAt', 'endAt', 'slotIds',
-              'priceSnapshot', 'commissionSnapshot', 'rescheduleCount', 'updatedBy', 'updatedAt',
-              'lastOperationId', 'lastOperationType', 'lastOperationPayloadHash'
-            ])
-            && hasMatchingBookingOperationAfter(businessId, bookingId, resource.data.studioId, request.resource.data, 'booking.reschedule')
-            && request.resource.data.endAt > request.resource.data.startAt
-            && request.resource.data.slotIds is list
-            && request.resource.data.slotIds.size() >= 1
-            && request.resource.data.slotIds.size() <= 96
-            && (
-              request.resource.data.durationMinutes != resource.data.durationMinutes
-              || (
-                request.resource.data.priceSnapshot == resource.data.priceSnapshot
-                && request.resource.data.commissionSnapshot == resource.data.commissionSnapshot
-              )
-            )
-          )
-          || (
-            isOwner(businessId)
-            && request.resource.data.updatedBy == request.auth.uid
-            && request.resource.data.updatedAt == request.time
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'settlement', 'updatedBy', 'updatedAt'
-            ])
-            && (
-              (
-                resource.data.status == 'COMPLETED_PENDING_SETTLEMENT'
-                && request.resource.data.status == 'SETTLEMENT_REVIEW'
-              )
-              || (
-                resource.data.status in ['COMPLETED_PENDING_SETTLEMENT', 'SETTLEMENT_REVIEW']
-                && request.resource.data.status == 'SETTLED'
-                && request.resource.data.settlement is map
-                && request.resource.data.settlement.paidAmountMinor is int
-                && request.resource.data.settlement.paidAmountMinor >= 0
-                && request.resource.data.settlement.ledgerEntryId == ('settlement_payment__' + bookingId)
-                && request.resource.data.settlement.commissionEntryId == ('commission_earned__' + bookingId)
-                && existsAfter(ledgerEntryPath(businessId, 'settlement_payment__' + bookingId))
-                && existsAfter(commissionEntryPath(businessId, 'commission_earned__' + bookingId))
-              )
-            )
-          );
+        allow update: if resource != null && canUpdateBooking(businessId, bookingId, resource.data, request.resource.data);
 
         allow delete: if false;
       }
@@ -1334,18 +1389,7 @@ service cloud.firestore {
             && resource.data.studioId in currentMember(businessId).assignedStudioIds
           );
 
-        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
-          && isValidActivityLogData(request.resource.data, businessId, eventId)
-          && (
-            isOwner(businessId)
-            || (
-              request.resource.data.entityType == 'booking'
-              && !(request.resource.data.eventType in [
-                'booking.settled', 'booking.settlement_review', 'ledger.adjusted', 'commission.adjusted'
-              ])
-            )
-          )
-          && request.resource.data.createdAt == request.time;
+        allow create: if canCreateActivityLog(businessId, eventId, request.resource.data);
 
         allow update, delete: if false;
       }
@@ -1361,36 +1405,7 @@ service cloud.firestore {
           );
         allow list: if false;
 
-        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
-          && request.resource.data.keys().hasOnly([
-            'operationId', 'requestId', 'payloadHash', 'operationType', 'action',
-            'businessId', 'bookingId', 'studioId', 'actorUid', 'actorRole',
-            'resultBookingStatus', 'resultSessionStatus', 'schemaVersion', 'createdAt'
-          ])
-          && request.resource.data.operationId == operationId
-          && request.resource.data.businessId == businessId
-          && request.resource.data.bookingId is string
-          && request.resource.data.studioId is string
-          && request.resource.data.operationType in ['booking.create', 'booking.decision', 'booking.reschedule', 'booking.session']
-          && (
-            (request.resource.data.operationType == 'booking.create' && request.resource.data.action == 'create')
-            || (request.resource.data.operationType == 'booking.decision' && request.resource.data.action == 'decision:CONFIRMED')
-            || (request.resource.data.operationType == 'booking.reschedule' && request.resource.data.action == 'reschedule')
-            || (request.resource.data.operationType == 'booking.session' && request.resource.data.action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject'])
-          )
-          && request.resource.data.actorUid == request.auth.uid
-          && request.resource.data.actorRole == currentMember(businessId).role
-          && request.resource.data.requestId is string
-          && request.resource.data.requestId.size() >= 8
-          && request.resource.data.requestId.size() <= 128
-          && request.resource.data.payloadHash is string
-          && request.resource.data.payloadHash.matches('^[a-f0-9]{16,64}$')
-          && request.resource.data.resultBookingStatus is string
-          && request.resource.data.resultSessionStatus is string
-          && request.resource.data.schemaVersion is int
-          && request.resource.data.schemaVersion >= 1
-          && request.resource.data.createdAt == request.time
-          && hasMatchingBookingOperationDocumentAfter(businessId, operationId, request.resource.data);
+        allow create: if canCreateBookingOperation(businessId, operationId, request.resource.data);
 
         allow update, delete: if false;
       }
@@ -1412,43 +1427,7 @@ service cloud.firestore {
             && resource.data.studioId in currentMember(businessId).assignedStudioIds
           );
 
-        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
-          && request.resource.data.keys().hasOnly([
-            'eventId', 'businessId', 'bookingId', 'studioId', 'action',
-            'fromStatus', 'toStatus', 'actorUid', 'actorRole', 'actorName',
-            'reason', 'operationId', 'requestId', 'payloadHash', 'schemaVersion', 'createdAt'
-          ])
-          && request.resource.data.eventId == eventId
-          && request.resource.data.operationId == eventId
-          && request.resource.data.businessId == businessId
-          && request.resource.data.bookingId is string
-          && request.resource.data.studioId is string
-          && request.resource.data.action in ['check_in', 'start', 'complete', 'no_show', 'cancel', 'reject']
-          && request.resource.data.fromStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS']
-          && request.resource.data.toStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED']
-          && (
-            (request.resource.data.action == 'check_in' && request.resource.data.fromStatus == 'UPCOMING' && request.resource.data.toStatus == 'UPCOMING')
-            || (request.resource.data.action == 'start' && request.resource.data.fromStatus == 'UPCOMING' && request.resource.data.toStatus == 'IN_PROGRESS')
-            || (request.resource.data.action == 'complete' && request.resource.data.fromStatus == 'IN_PROGRESS' && request.resource.data.toStatus == 'COMPLETED')
-            || (request.resource.data.action == 'no_show' && request.resource.data.fromStatus == 'UPCOMING' && request.resource.data.toStatus == 'NO_SHOW')
-            || (request.resource.data.action == 'cancel' && request.resource.data.fromStatus in ['PENDING', 'UPCOMING', 'IN_PROGRESS'] && request.resource.data.toStatus == 'CANCELLED')
-            || (request.resource.data.action == 'reject' && request.resource.data.fromStatus == 'PENDING' && request.resource.data.toStatus == 'CANCELLED')
-          )
-          && request.resource.data.actorUid == request.auth.uid
-          && request.resource.data.actorRole == currentMember(businessId).role
-          && request.resource.data.actorName is string
-          && request.resource.data.actorName.size() >= 1
-          && request.resource.data.actorName.size() <= 120
-          && isValidNullableString(request.resource.data, 'reason', 300)
-          && request.resource.data.requestId is string
-          && request.resource.data.requestId.size() >= 8
-          && request.resource.data.requestId.size() <= 128
-          && request.resource.data.payloadHash is string
-          && request.resource.data.payloadHash.matches('^[a-f0-9]{16,64}$')
-          && request.resource.data.schemaVersion is int
-          && request.resource.data.schemaVersion >= 1
-          && request.resource.data.createdAt == request.time
-          && hasMatchingBookingSessionEventDocumentAfter(businessId, eventId, request.resource.data);
+        allow create: if canCreateBookingSessionEvent(businessId, eventId, request.resource.data);
 
         allow update, delete: if false;
       }

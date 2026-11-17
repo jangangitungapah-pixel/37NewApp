@@ -1,173 +1,330 @@
+<#
+.SYNOPSIS
+    Local verification harness for Phase 10 booking/session lifecycle and Firestore Rules.
+
+.DESCRIPTION
+    Executes PowerShell syntax parsing, branch verification, runtime checks, ESLint,
+    targeted Vitest unit tests, Firestore Rules emulator tests, Vite production build,
+    and final local Git state inspection. Captures child-process exit codes directly
+    via System.Diagnostics.Process so non-zero failures always fail the run reliably
+    under Windows PowerShell 5.1 and PowerShell 7 without treating normal native stderr
+    warnings as false errors. LOCAL ONLY: never pushes, merges, or deploys.
+#>
 [CmdletBinding()]
-param()
+param(
+    [string]$ExpectedBranch = 'feature/phase-10-booking-session-lifecycle',
+    [string[]]$UnitTestFiles = @(
+        'tests/unit/bookingSessionLifecycle.test.js',
+        'tests/unit/bookingSlotAndValidator.test.js'
+    ),
+    [string[]]$ExtraRulesArgs = @()
+)
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$repoRoot = $PSScriptRoot
-$timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$logPath = Join-Path $repoRoot ('verify-phase10-booking-rules-{0}.txt' -f $timestamp)
-$script:failedStages = @()
+$ProgressPreference = 'SilentlyContinue'
 
-Set-Location -LiteralPath $repoRoot
+$RepoRoot = (Resolve-Path -Path $PSScriptRoot).Path
+$Timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$LogPath = Join-Path -Path $RepoRoot -ChildPath ("verify-phase10-booking-rules-{0}.txt" -f $Timestamp)
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$LogWriter = New-Object System.IO.StreamWriter($LogPath, $false, $Utf8NoBom)
+$LogWriter.AutoFlush = $true
 
-function Write-VerificationLog {
-    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
+$StageResults = New-Object System.Collections.Generic.List[object]
 
-    $line = '[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'), $Message
-    Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
-    Write-Host $line
+function Write-Log {
+    param(
+        [AllowEmptyString()]
+        [string]$Message = ''
+    )
+    $LogWriter.WriteLine($Message)
+    [Console]::Out.WriteLine($Message)
+}
+
+function Format-CommandArgument {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+    if ($Value -eq '') {
+        return '""'
+    }
+    if ($Value -match '[\s"&|<>^()]') {
+        $escaped = $Value.Replace('"', '\"')
+        return '"' + $escaped + '"'
+    }
+    return $Value
+}
+
+function Resolve-NativeApplication {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CommandName
+    )
+    $app = Get-Command -Name $CommandName -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -eq $app) {
+        throw "Required native application '$CommandName' was not found on PATH."
+    }
+    return $app.Source
+}
+
+function Invoke-NativeProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Executable,
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory = $true)]
+        [string]$WorkingDirectory
+    )
+
+    $resolvedExe = Resolve-NativeApplication -CommandName $Executable
+    $ext = [System.IO.Path]::GetExtension($resolvedExe).ToLowerInvariant()
+    $quotedArgs = @($Arguments | ForEach-Object { Format-CommandArgument -Value $_ }) -join ' '
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $psi.EnvironmentVariables['NO_COLOR'] = '1'
+    $psi.EnvironmentVariables['FORCE_COLOR'] = '0'
+
+    if ($ext -eq '.cmd' -or $ext -eq '.bat') {
+        $psi.FileName = $env:ComSpec
+        if ([string]::IsNullOrWhiteSpace($quotedArgs)) {
+            $psi.Arguments = '/d /s /c ""' + $resolvedExe + '""'
+        }
+        else {
+            $psi.Arguments = '/d /s /c ""' + $resolvedExe + '" ' + $quotedArgs + '"'
+        }
+    }
+    else {
+        $psi.FileName = $resolvedExe
+        $psi.Arguments = $quotedArgs
+    }
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+
+    try {
+        if (-not $process.Start()) {
+            throw "Failed to start process '$resolvedExe'."
+        }
+
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+
+        $process.WaitForExit()
+        [System.Threading.Tasks.Task]::WaitAll(@(
+                [System.Threading.Tasks.Task]$stdoutTask,
+                [System.Threading.Tasks.Task]$stderrTask
+            ))
+
+        return [PSCustomObject]@{
+            ExecutablePath = $resolvedExe
+            ExitCode       = [int]$process.ExitCode
+            StdOut         = $stdoutTask.Result
+            StdErr         = $stderrTask.Result
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
 }
 
 function Invoke-VerificationStage {
     param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][scriptblock]$Command
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$Action
     )
 
-    Write-VerificationLog ''
-    Write-VerificationLog ('===== STAGE: {0} =====' -f $Name)
+    $startedAt = Get-Date
+    Write-Log ('=' * 72)
+    Write-Log ("STAGE: {0}" -f $Name)
+    Write-Log ("STARTED_AT: {0}" -f $startedAt.ToString('yyyy-MM-dd HH:mm:ss zzz'))
 
-    $stageExitCode = 0
-    $output = @()
-    $LASTEXITCODE = 0
-
-    $originalErrorActionPreference = $ErrorActionPreference
+    $exitCode = 1
+    $passed = $false
 
     try {
-        # Native tools such as npm may write normal diagnostics to stderr.
-        # Keep those records in the captured output instead of terminating
-        # the stage before the native process has returned its real exit code.
-        $ErrorActionPreference = 'Continue'
-        # Dot-source the stage scriptblock in this function scope so its native-command `$LASTEXITCODE` is preserved.
-        $output = @(. $Command 2>&1)
-
-        if ($null -ne $LASTEXITCODE) {
-            $stageExitCode = [int]$LASTEXITCODE
+        $resultCode = & $Action
+        if ($null -eq $resultCode) {
+            $exitCode = 1
         }
-    }
-    catch {
-        $output += $_
-        $stageExitCode = 1
-    }
-    finally {
-        $ErrorActionPreference = $originalErrorActionPreference
-    }
-
-    foreach ($item in $output) {
-        if ($item -is [System.Management.Automation.ErrorRecord]) {
-            $rendered = $item.ToString()
+        elseif ($resultCode -is [int]) {
+            $exitCode = $resultCode
         }
         else {
-            $rendered = [string]$item
+            $exitCode = [int](@($resultCode)[-1])
         }
-
-        Add-Content -LiteralPath $logPath -Value $rendered -Encoding UTF8
-        Write-Host $rendered
+        $passed = ($exitCode -eq 0)
+    }
+    catch {
+        $exitCode = 1
+        $passed = $false
+        Write-Log ("EXCEPTION: {0}" -f $_.Exception.ToString())
     }
 
-    Write-VerificationLog ('EXIT_CODE [{0}] = {1}' -f $Name, $stageExitCode)
+    $finishedAt = Get-Date
+    $durationSec = [Math]::Round(($finishedAt - $startedAt).TotalSeconds, 2)
+    $statusText = if ($passed) { 'PASS' } else { 'FAIL' }
 
-    if ($stageExitCode -ne 0) {
-        $script:failedStages += $Name
-    }
+    Write-Log ("STAGE_RESULT: {0}" -f $statusText)
+    Write-Log ("EXIT_CODE: {0}" -f $exitCode)
+    Write-Log ("DURATION_SECONDS: {0}" -f $durationSec)
+
+    $StageResults.Add([PSCustomObject]@{
+            Name            = $Name
+            Status          = $statusText
+            ExitCode        = $exitCode
+            DurationSeconds = $durationSec
+            Passed          = $passed
+        })
 }
 
-Write-VerificationLog '37NewApp - Phase 10 Booking Rules Optimization Verification'
-Write-VerificationLog ('Repository root: {0}' -f $repoRoot)
-Write-VerificationLog ('Log file: {0}' -f $logPath)
-Write-VerificationLog 'Safety: local verification only; no deploy, Hosting publish, merge, or production data writes.'
-
-Invoke-VerificationStage -Name 'PowerShell parser check' -Command {
-    $tokens = $null
-    $parseErrors = $null
-
-    [void][System.Management.Automation.Language.Parser]::ParseFile(
-        $PSCommandPath,
-        [ref]$tokens,
-        [ref]$parseErrors
+function Invoke-LoggedNativeStep {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Executable,
+        [string[]]$Arguments = @()
     )
 
-    if ($parseErrors.Count -gt 0) {
-        $parseErrors | ForEach-Object { Write-Output $_.Message }
-        throw 'PowerShell parser reported syntax errors.'
+    $displayCmd = if ($Arguments.Count -gt 0) {
+        "{0} {1}" -f $Executable, ($Arguments -join ' ')
+    }
+    else {
+        $Executable
+    }
+    Write-Log ("COMMAND: {0}" -f $displayCmd)
+
+    $res = Invoke-NativeProcess -Executable $Executable -Arguments $Arguments -WorkingDirectory $RepoRoot
+    Write-Log ("RESOLVED_EXECUTABLE: {0}" -f $res.ExecutablePath)
+
+    if (-not [string]::IsNullOrWhiteSpace($res.StdOut)) {
+        Write-Log '--- STDOUT ---'
+        Write-Log $res.StdOut.TrimEnd("`r", "`n")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($res.StdErr)) {
+        Write-Log '--- STDERR ---'
+        Write-Log $res.StdErr.TrimEnd("`r", "`n")
+    }
+    Write-Log ("PROCESS_EXIT_CODE: {0}" -f $res.ExitCode)
+    return $res
+}
+
+$OverallPassed = $false
+
+try {
+    Write-Log 'PHASE 10 BOOKING/SESSION & FIRESTORE RULES VERIFICATION'
+    Write-Log ("REPO_ROOT: {0}" -f $RepoRoot)
+    Write-Log ("LOG_FILE: {0}" -f $LogPath)
+    Write-Log ("POWERSHELL_VERSION: {0}" -f $PSVersionTable.PSVersion.ToString())
+
+    Invoke-VerificationStage -Name 'PowerShell parser check' -Action {
+        $tokens = $null
+        $parseErrors = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $PSCommandPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        if ($null -ne $parseErrors -and $parseErrors.Count -gt 0) {
+            foreach ($err in $parseErrors) {
+                Write-Log ("PARSE_ERROR L{0}:{1}: {2}" -f $err.Extent.StartLineNumber, $err.Extent.StartColumnNumber, $err.Message)
+            }
+            return 1
+        }
+        Write-Log ("PARSED_OK: {0} (tokens={1}, errors=0)" -f $PSCommandPath, $tokens.Count)
+        return 0
     }
 
-    Write-Output 'PowerShell parser: PASS'
-}
-
-Invoke-VerificationStage -Name 'Branch guard' -Command {
-    $branch = [string](git branch --show-current)
-
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Unable to determine the current Git branch.'
+    Invoke-VerificationStage -Name 'Branch guard' -Action {
+        $res = Invoke-LoggedNativeStep -Executable 'git' -Arguments @('rev-parse', '--abbrev-ref', 'HEAD')
+        if ($res.ExitCode -ne 0) {
+            return $res.ExitCode
+        }
+        $currentBranch = $res.StdOut.Trim()
+        Write-Log ("EXPECTED_BRANCH: {0}" -f $ExpectedBranch)
+        Write-Log ("CURRENT_BRANCH:  {0}" -f $currentBranch)
+        if ($currentBranch -ne $ExpectedBranch) {
+            Write-Log 'BRANCH_MISMATCH: Current branch does not match expected Phase 10 branch.'
+            return 1
+        }
+        return 0
     }
 
-    $branch = $branch.Trim()
-    Write-Output ('Branch: {0}' -f $branch)
-
-    if ($branch -ne 'feature/phase-10-booking-session-lifecycle') {
-        throw 'Wrong branch. Expected feature/phase-10-booking-session-lifecycle.'
-    }
-}
-
-Invoke-VerificationStage -Name 'Runtime versions' -Command {
-    node --version
-
-    if ($LASTEXITCODE -ne 0) {
-        throw 'node --version failed.'
+    Invoke-VerificationStage -Name 'Runtime versions' -Action {
+        $nodeRes = Invoke-LoggedNativeStep -Executable 'node' -Arguments @('--version')
+        if ($nodeRes.ExitCode -ne 0) {
+            return $nodeRes.ExitCode
+        }
+        $npmRes = Invoke-LoggedNativeStep -Executable 'npm' -Arguments @('--version')
+        return $npmRes.ExitCode
     }
 
-    npm --version
-
-    if ($LASTEXITCODE -ne 0) {
-        throw 'npm --version failed.'
-    }
-}
-
-Invoke-VerificationStage -Name 'ESLint' -Command {
-    npm run lint
-}
-
-Invoke-VerificationStage -Name 'Targeted booking/session unit tests' -Command {
-    npm run test:unit -- tests/unit/bookingSessionLifecycle.test.js tests/unit/bookingSlotAndValidator.test.js
-}
-
-Invoke-VerificationStage -Name 'Firestore Rules emulator tests' -Command {
-    npm run test:rules
-}
-
-Invoke-VerificationStage -Name 'Production build' -Command {
-    npm run build
-}
-
-Invoke-VerificationStage -Name 'Final Git status and HEAD' -Command {
-    git status --short --branch
-
-    if ($LASTEXITCODE -ne 0) {
-        throw 'git status failed.'
+    Invoke-VerificationStage -Name 'ESLint' -Action {
+        $res = Invoke-LoggedNativeStep -Executable 'npm' -Arguments @('run', 'lint')
+        return $res.ExitCode
     }
 
-    git rev-parse HEAD
+    Invoke-VerificationStage -Name 'Targeted booking/session unit tests' -Action {
+        $unitArgs = @('run', 'test:unit', '--') + $UnitTestFiles
+        $res = Invoke-LoggedNativeStep -Executable 'npm' -Arguments $unitArgs
+        return $res.ExitCode
+    }
 
-    if ($LASTEXITCODE -ne 0) {
-        throw 'git rev-parse HEAD failed.'
+    Invoke-VerificationStage -Name 'Firestore Rules emulator tests' -Action {
+        $rulesArgs = @('run', 'test:rules')
+        if ($ExtraRulesArgs.Count -gt 0) {
+            $rulesArgs = $rulesArgs + @('--') + $ExtraRulesArgs
+        }
+        $res = Invoke-LoggedNativeStep -Executable 'npm' -Arguments $rulesArgs
+        return $res.ExitCode
+    }
+
+    Invoke-VerificationStage -Name 'Production build' -Action {
+        $res = Invoke-LoggedNativeStep -Executable 'npm' -Arguments @('run', 'build')
+        return $res.ExitCode
+    }
+
+    Invoke-VerificationStage -Name 'Final Git status and HEAD' -Action {
+        $statusRes = Invoke-LoggedNativeStep -Executable 'git' -Arguments @('status', '--short', '--branch')
+        if ($statusRes.ExitCode -ne 0) {
+            return $statusRes.ExitCode
+        }
+        $headRes = Invoke-LoggedNativeStep -Executable 'git' -Arguments @('rev-parse', 'HEAD')
+        return $headRes.ExitCode
+    }
+
+    $failedStages = @($StageResults | Where-Object { -not $_.Passed })
+    $OverallPassed = ($failedStages.Count -eq 0 -and $StageResults.Count -gt 0)
+
+    Write-Log ('=' * 72)
+    Write-Log 'VERIFICATION SUMMARY'
+    foreach ($stage in $StageResults) {
+        Write-Log ("  - {0}: STATUS={1}, EXIT_CODE={2}, DURATION={3}s" -f $stage.Name, $stage.Status, $stage.ExitCode, $stage.DurationSeconds)
+    }
+    Write-Log ("LOG_FILE: {0}" -f $LogPath)
+    if ($OverallPassed) {
+        Write-Log 'OVERALL_RESULT = PASS'
+    }
+    else {
+        Write-Log 'OVERALL_RESULT = FAIL'
     }
 }
-
-Write-VerificationLog ''
-Write-VerificationLog '===== SUMMARY ====='
-
-if ($script:failedStages.Count -eq 0) {
-    Write-VerificationLog 'OVERALL_RESULT = PASS'
-}
-else {
-    Write-VerificationLog ('OVERALL_RESULT = FAIL ({0} failed stage(s))' -f $script:failedStages.Count)
-    Write-VerificationLog ('FAILED_STAGES = {0}' -f ($script:failedStages -join ', '))
+finally {
+    $LogWriter.Flush()
+    $LogWriter.Dispose()
 }
 
-Write-VerificationLog ('LOG_PATH = {0}' -f $logPath)
-
-if ($script:failedStages.Count -gt 0) {
-    exit 1
+if ($OverallPassed) {
+    exit 0
 }
-
-exit 0
+exit 1

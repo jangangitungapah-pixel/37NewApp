@@ -1,0 +1,66 @@
+﻿[2026-11-17 14:45:20 +07:00] 37NewApp - Phase 10 Booking Rules Optimization Verification
+[2026-11-17 14:45:20 +07:00] Repository root: C:\Users\hazel\source\repos\37NewApp
+[2026-11-17 14:45:20 +07:00] Log file: C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules-20261117-144520.txt
+[2026-11-17 14:45:20 +07:00] Safety: local verification only; no deploy, Hosting publish, merge, or production data writes.
+[2026-11-17 14:45:20 +07:00] 
+[2026-11-17 14:45:20 +07:00] ===== STAGE: PowerShell parser check =====
+PowerShell parser: PASS
+[2026-11-17 14:45:21 +07:00] EXIT_CODE [PowerShell parser check] = 0
+[2026-11-17 14:45:21 +07:00] 
+[2026-11-17 14:45:21 +07:00] ===== STAGE: Branch guard =====
+Branch: feature/phase-10-booking-session-lifecycle
+[2026-11-17 14:45:21 +07:00] EXIT_CODE [Branch guard] = 0
+[2026-11-17 14:45:21 +07:00] 
+[2026-11-17 14:45:21 +07:00] ===== STAGE: Runtime versions =====
+v24.19.0
+11.17.0
+[2026-11-17 14:45:22 +07:00] EXIT_CODE [Runtime versions] = 0
+[2026-11-17 14:45:22 +07:00] 
+[2026-11-17 14:45:22 +07:00] ===== STAGE: ESLint =====
+
+> 37musicstudio@0.1.0 lint
+> eslint .
+
+[2026-11-17 14:45:26 +07:00] EXIT_CODE [ESLint] = 0
+[2026-11-17 14:45:26 +07:00] 
+[2026-11-17 14:45:26 +07:00] ===== STAGE: Targeted booking/session unit tests =====
+
+> 37musicstudio@0.1.0 test:unit
+> vitest run --project unit tests/unit/bookingSessionLifecycle.test.js tests/unit/bookingSlotAndValidator.test.js
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/hazel/source/repos/37NewApp[39m
+
+ [32mΓ£ô[39m [30m[42m unit [49m[39m tests/unit/bookingSessionLifecycle.test.js [2m([22m[2m19 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32mΓ£ô[39m [30m[42m unit [49m[39m tests/unit/bookingSlotAndValidator.test.js [2m([22m[2m5 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m24 passed[39m[22m[90m (24)[39m
+[2m   Start at [22m 14:45:28
+[2m   Duration [22m 3.64s[2m (transform 272ms, setup 1.11s, collect 1.55s, tests 110ms, environment 2.57s, prepare 493ms)[22m
+
+[2026-11-17 14:45:32 +07:00] EXIT_CODE [Targeted booking/session unit tests] = 0
+[2026-11-17 14:45:32 +07:00] 
+[2026-11-17 14:45:32 +07:00] ===== STAGE: Firestore Rules emulator tests =====
+[90mstderr[2m | tests/rules/phase01.rules.test.js[2m > [22m[2mPhase 01 Firestore Security Rules (Deny-by-Default)[2m > [22m[2mdenies all unauthenticated reads and writes
+[2026-11-17 14:46:08 +07:00] EXIT_CODE [Firestore Rules emulator tests] = 1
+[2026-11-17 14:46:08 +07:00] 
+[2026-11-17 14:46:08 +07:00] ===== STAGE: Production build =====
+[33mnode_modules/zod/v4/core/util.js (400:0): A comment
+[2026-11-17 14:46:21 +07:00] EXIT_CODE [Production build] = 1
+[2026-11-17 14:46:21 +07:00] 
+[2026-11-17 14:46:21 +07:00] ===== STAGE: Final Git status and HEAD =====
+## feature/phase-10-booking-session-lifecycle...origin/feature/phase-10-booking-session-lifecycle
+?? ui-foundation-verify-20261116-235201.txt
+?? verify-phase10-booking-rules-20261117-144350.txt
+?? verify-phase10-booking-rules-20261117-144520.txt
+?? verify-phase10-booking-session-v2.ps1
+?? verify-phase10-booking-session-v3.ps1
+?? verify-phase10-booking-session.ps1
+a52ad4e2ce659d32ef5d2759fff0cfc1646855c1
+[2026-11-17 14:46:21 +07:00] EXIT_CODE [Final Git status and HEAD] = 0
+[2026-11-17 14:46:21 +07:00] 
+[2026-11-17 14:46:21 +07:00] ===== SUMMARY =====
+[2026-11-17 14:46:21 +07:00] OVERALL_RESULT = FAIL (2 failed stage(s))
+[2026-11-17 14:46:21 +07:00] FAILED_STAGES = Firestore Rules emulator tests, Production build
+[2026-11-17 14:46:21 +07:00] LOG_PATH = C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules-20261117-144520.txt
