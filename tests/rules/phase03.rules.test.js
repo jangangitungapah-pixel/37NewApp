@@ -628,6 +628,11 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
     await assertFails(updateDoc(eventRef, { actorName: 'Tampered' }));
     await assertFails(deleteDoc(eventRef));
 
+    const operationRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', eventId);
+    expect((await getDoc(operationRef)).exists()).toBe(true);
+    await assertFails(updateDoc(operationRef, { payloadHash: 'b'.repeat(64) }));
+    await assertFails(deleteDoc(operationRef));
+
     const activityRef = doc(ownerDb, 'businesses', BIZ_ID, 'activityLogs', 'booking.created__bk-session');
     expect((await getDoc(activityRef)).exists()).toBe(true);
     await assertFails(updateDoc(activityRef, { summary: 'Tampered' }));
