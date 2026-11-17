@@ -11,6 +11,7 @@ import {
 } from '../../src/domain/validators/bookingSessionValidator.js';
 import { deriveSessionStatusFromBookingStatus } from '../../src/domain/validators/bookingValidator.js';
 import { validateBookingSessionEventDoc } from '../../src/domain/validators/bookingSessionValidator.js';
+import { getOrCreateOperationContext } from '../../src/shared/utils/bookingOperationIds.js';
 
 const schedule = new Date('2026-11-20T07:00:00.000Z');
 const baseBooking = {
@@ -192,6 +193,65 @@ describe('Phase 10 append-only session event contract', () => {
       ...validEvent,
       reason: 'x'.repeat(301),
     })).toThrow(/300 karakter/);
+  });
+});
+
+describe('Phase 10 idempotency operation context', () => {
+  it('keeps a canonical payload stable across retry ordering and binds changed payloads to a conflict hash', async () => {
+    const first = await getOrCreateOperationContext({
+      businessId: 'business-1',
+      actorUid: 'owner-1',
+      operationType: 'booking.create',
+      requestId: 'request-intent-001',
+      payload: {
+        studioId: 'studio-1',
+        serviceId: 'service-1',
+        dateKey: '2026-11-20',
+        startTime: '14:00',
+      },
+    });
+
+    const retry = await getOrCreateOperationContext({
+      businessId: 'business-1',
+      actorUid: 'owner-1',
+      operationType: 'booking.create',
+      requestId: 'request-intent-001',
+      payload: {
+        startTime: '14:00',
+        dateKey: '2026-11-20',
+        serviceId: 'service-1',
+        studioId: 'studio-1',
+      },
+    });
+
+    expect(retry.operationId).toBe(first.operationId);
+    expect(retry.payloadHash).toBe(first.payloadHash);
+
+    const changedPayload = await getOrCreateOperationContext({
+      businessId: 'business-1',
+      actorUid: 'owner-1',
+      operationType: 'booking.create',
+      requestId: 'request-intent-001',
+      payload: {
+        studioId: 'studio-1',
+        serviceId: 'service-1',
+        dateKey: '2026-11-20',
+        startTime: '14:15',
+      },
+    });
+
+    expect(changedPayload.operationId).toBe(first.operationId);
+    expect(changedPayload.payloadHash).not.toBe(first.payloadHash);
+  });
+
+  it('rejects non-finite values before producing an operation marker context', async () => {
+    await expect(getOrCreateOperationContext({
+      businessId: 'business-1',
+      actorUid: 'owner-1',
+      operationType: 'booking.reschedule',
+      requestId: 'request-intent-002',
+      payload: { durationMinutes: Number.NaN },
+    })).rejects.toThrow(/non-finite/);
   });
 });
 
