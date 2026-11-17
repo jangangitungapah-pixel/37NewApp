@@ -119,11 +119,30 @@ describe('Phase 10 booking/session lifecycle contracts', () => {
       reason: 'Ditolak',
     })).toThrow(/menunggu konfirmasi/);
 
-    expect(assertSessionActionAllowed({
+    const cancelledNewSession = assertSessionActionAllowed({
       action: SESSION_ACTION.CANCEL,
-      booking: { ...baseBooking, status: BOOKING_STATUS.IN_PROGRESS, sessionStatus: SESSION_STATUS.IN_PROGRESS, actualStartAt: schedule },
+      booking: {
+        ...baseBooking,
+        status: BOOKING_STATUS.CONFIRMED,
+        sessionStatus: SESSION_STATUS.IN_PROGRESS,
+        actualStartAt: schedule,
+      },
       reason: 'Operasional darurat',
-    }).nextSessionStatus).toBe(SESSION_STATUS.CANCELLED);
+    });
+    expect(cancelledNewSession.nextBookingStatus).toBe(BOOKING_STATUS.CANCELLED);
+    expect(cancelledNewSession.nextSessionStatus).toBe(SESSION_STATUS.CANCELLED);
+
+    const cancelledLegacySession = assertSessionActionAllowed({
+      action: SESSION_ACTION.CANCEL,
+      booking: {
+        ...baseBooking,
+        status: BOOKING_STATUS.IN_PROGRESS,
+        sessionStatus: SESSION_STATUS.IN_PROGRESS,
+        actualStartAt: null,
+      },
+      reason: 'Operasional darurat',
+    });
+    expect(cancelledLegacySession.nextSessionStatus).toBe(SESSION_STATUS.CANCELLED);
   });
 });
 
