@@ -176,6 +176,17 @@ export function assertSessionActionAllowed({
 
 const VALID_SESSION_ACTIONS = new Set(Object.values(SESSION_ACTION));
 const VALID_SESSION_STATUSES = new Set(Object.values(SESSION_STATUS));
+const SESSION_EVENT_EDGES = Object.freeze({
+  [SESSION_ACTION.CHECK_IN]: { from: [SESSION_STATUS.UPCOMING], to: SESSION_STATUS.UPCOMING },
+  [SESSION_ACTION.START]: { from: [SESSION_STATUS.UPCOMING], to: SESSION_STATUS.IN_PROGRESS },
+  [SESSION_ACTION.COMPLETE]: { from: [SESSION_STATUS.IN_PROGRESS], to: SESSION_STATUS.COMPLETED },
+  [SESSION_ACTION.NO_SHOW]: { from: [SESSION_STATUS.UPCOMING], to: SESSION_STATUS.NO_SHOW },
+  [SESSION_ACTION.CANCEL]: {
+    from: [SESSION_STATUS.PENDING, SESSION_STATUS.UPCOMING, SESSION_STATUS.IN_PROGRESS],
+    to: SESSION_STATUS.CANCELLED,
+  },
+  [SESSION_ACTION.REJECT]: { from: [SESSION_STATUS.PENDING], to: SESSION_STATUS.CANCELLED },
+});
 
 /**
  * Validates append-only business-scoped booking session history.
@@ -197,14 +208,43 @@ export function validateBookingSessionEventDoc(raw) {
     throw new DomainValidationError('Status awal/akhir riwayat sesi tidak valid.', 'fromStatus');
   }
 
+  const expectedEdge = SESSION_EVENT_EDGES[action];
+  if (!expectedEdge.from.includes(fromStatus) || expectedEdge.to !== toStatus) {
+    throw new DomainValidationError(
+      `Transisi riwayat sesi ${action} dari ${fromStatus} ke ${toStatus} tidak valid.`,
+      'toStatus',
+    );
+  }
+
   const actorRole = requireNonEmptyString(raw.actorRole, 'actorRole');
   if (!['owner', 'operator'].includes(actorRole)) {
     throw new DomainValidationError('Role aktor riwayat sesi tidak valid.', 'actorRole');
   }
 
+  const actorName = requireNonEmptyString(raw.actorName, 'actorName');
+  if (actorName.length > 120) {
+    throw new DomainValidationError('Nama aktor riwayat sesi maksimal 120 karakter.', 'actorName');
+  }
+
   const payloadHash = requireNonEmptyString(raw.payloadHash, 'payloadHash');
   if (!/^[a-f0-9]{16,64}$/.test(payloadHash)) {
     throw new DomainValidationError('Hash payload operasi sesi tidak valid.', 'payloadHash');
+  }
+
+  const requestId = requireNonEmptyString(raw.requestId, 'requestId');
+  if (requestId.length < 8) {
+    throw new DomainValidationError('Request ID aksi sesi minimal 8 karakter.', 'requestId');
+  }
+
+  const eventId = requireNonEmptyString(raw.eventId, 'eventId');
+  const operationId = requireNonEmptyString(raw.operationId, 'operationId');
+  if (eventId !== operationId) {
+    throw new DomainValidationError('eventId harus sama dengan operationId.', 'eventId');
+  }
+
+  const schemaVersion = raw.schemaVersion ?? 1;
+  if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) {
+    throw new DomainValidationError('schemaVersion riwayat sesi harus integer >= 1.', 'schemaVersion');
   }
 
   const reason = optionalStringOrNull(raw.reason, 'reason');
@@ -213,7 +253,7 @@ export function validateBookingSessionEventDoc(raw) {
   }
 
   return {
-    eventId: requireNonEmptyString(raw.eventId, 'eventId'),
+    eventId,
     businessId: requireNonEmptyString(raw.businessId, 'businessId'),
     bookingId: requireNonEmptyString(raw.bookingId, 'bookingId'),
     studioId: requireNonEmptyString(raw.studioId, 'studioId'),
@@ -222,14 +262,12 @@ export function validateBookingSessionEventDoc(raw) {
     toStatus,
     actorUid: requireNonEmptyString(raw.actorUid, 'actorUid'),
     actorRole,
-    actorName: requireNonEmptyString(raw.actorName, 'actorName'),
+    actorName,
     reason,
-    operationId: requireNonEmptyString(raw.operationId, 'operationId'),
-    requestId: requireNonEmptyString(raw.requestId, 'requestId'),
+    operationId,
+    requestId,
     payloadHash,
-    schemaVersion: Number.isSafeInteger(raw.schemaVersion) && raw.schemaVersion >= 1
-      ? raw.schemaVersion
-      : 1,
+    schemaVersion,
     createdAt: raw.createdAt ?? null,
   };
 }
