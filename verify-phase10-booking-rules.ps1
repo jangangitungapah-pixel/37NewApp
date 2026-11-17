@@ -37,7 +37,8 @@ function Invoke-VerificationStage {
         # Keep those records in the captured output instead of terminating
         # the stage before the native process has returned its real exit code.
         $ErrorActionPreference = 'Continue'
-        $output = @(& $Command 2>&1)
+        # Dot-source the stage scriptblock in this function scope so its native-command `$LASTEXITCODE` is preserved.
+        $output = @(. $Command 2>&1)
 
         if ($null -ne $LASTEXITCODE) {
             $stageExitCode = [int]$LASTEXITCODE
