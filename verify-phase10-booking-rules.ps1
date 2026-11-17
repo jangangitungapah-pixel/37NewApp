@@ -10,7 +10,7 @@ $script:failedStages = @()
 Set-Location -LiteralPath $repoRoot
 
 function Write-VerificationLog {
-    param([Parameter(Mandatory = $true)][string]$Message)
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message)
 
     $line = '[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'), $Message
     Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
