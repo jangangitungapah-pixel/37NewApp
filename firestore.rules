@@ -38,6 +38,50 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/commissionEntries/$(entryId);
     }
 
+    function getMemberDataIfPresent(businessId) {
+      return isSignedIn() && exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+    }
+
+    function isActiveMemberRecord(m) {
+      return m != null && m.status == 'active' && m.uid == request.auth.uid;
+    }
+
+    function hasActiveMembership(businessId) {
+      return isActiveMemberRecord(getMemberDataIfPresent(businessId));
+    }
+
+    function currentMember(businessId) {
+      return get(memberPath(businessId, request.auth.uid)).data;
+    }
+
+    function isOwner(businessId) {
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m) && m.role == 'owner';
+    }
+
+    function canAccessCustomers(businessId) {
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m)
+        && (m.role == 'owner' || m.get(['permissions', 'canManageCustomers'], false) == true);
+    }
+
+    function canManageGallery(businessId) {
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m)
+        && (m.role == 'owner' || m.get(['permissions', 'canManageGallery'], false) == true);
+    }
+
+    function canOperateStudioBooking(businessId, studioId) {
+      let m = getMemberDataIfPresent(businessId);
+      return isActiveMemberRecord(m)
+        && (
+          m.role == 'owner'
+          || (m.get(['permissions', 'canManageBookings'], false) == true && studioId in m.assignedStudioIds)
+        );
+    }
+
     function bookingOperationPath(businessId, operationId) {
       return /databases/$(database)/documents/businesses/$(businessId)/bookingOperations/$(operationId);
     }
@@ -131,49 +175,6 @@ service cloud.firestore {
     }
 
 
-    function getMemberDataIfPresent(businessId) {
-      return isSignedIn() && exists(memberPath(businessId, request.auth.uid))
-        ? get(memberPath(businessId, request.auth.uid)).data
-        : null;
-    }
-
-    function isActiveMemberRecord(m) {
-      return m != null && m.status == 'active' && m.uid == request.auth.uid;
-    }
-
-    function hasActiveMembership(businessId) {
-      return isActiveMemberRecord(getMemberDataIfPresent(businessId));
-    }
-
-    function currentMember(businessId) {
-      return get(memberPath(businessId, request.auth.uid)).data;
-    }
-
-    function isOwner(businessId) {
-      let m = getMemberDataIfPresent(businessId);
-      return isActiveMemberRecord(m) && m.role == 'owner';
-    }
-
-    function canAccessCustomers(businessId) {
-      let m = getMemberDataIfPresent(businessId);
-      return isActiveMemberRecord(m)
-        && (m.role == 'owner' || m.get(['permissions', 'canManageCustomers'], false) == true);
-    }
-
-    function canManageGallery(businessId) {
-      let m = getMemberDataIfPresent(businessId);
-      return isActiveMemberRecord(m)
-        && (m.role == 'owner' || m.get(['permissions', 'canManageGallery'], false) == true);
-    }
-
-    function canOperateStudioBooking(businessId, studioId) {
-      let m = getMemberDataIfPresent(businessId);
-      return isActiveMemberRecord(m)
-        && (
-          m.role == 'owner'
-          || (m.get(['permissions', 'canManageBookings'], false) == true && studioId in m.assignedStudioIds)
-        );
-    }
 
     function isValidRole(role) {
       return role in ['owner', 'operator'];
