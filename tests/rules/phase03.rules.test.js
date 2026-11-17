@@ -636,6 +636,17 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
 
     const booking = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-direct-accepted-risk'));
     expect(booking.exists()).toBe(true);
+
+    const delayedSlot = plan.allSlots[0];
+    await assertFails(setDoc(
+      doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', delayedSlot.slotId),
+      makeSlotPayload({
+        slot: delayedSlot,
+        bookingId: 'bk-direct-accepted-risk',
+        actorUid: OWNER_UID,
+      }),
+    ));
+
     for (const slotId of plan.slotIds) {
       const slot = await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId));
       expect(slot.exists()).toBe(false);
