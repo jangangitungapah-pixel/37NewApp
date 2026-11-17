@@ -53,13 +53,21 @@ function formatLogTimestamp(dateVal, timeZone = 'Asia/Jakarta') {
   if (!(dateVal instanceof Date) || Number.isNaN(dateVal.getTime())) {
     return 'Waktu tidak tersedia';
   }
-  return new Intl.DateTimeFormat('id-ID', {
-    timeZone,
+  const options = {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(dateVal);
+  };
+  try {
+    return new Intl.DateTimeFormat('id-ID', { ...options, timeZone }).format(dateVal);
+  } catch {
+    // Older snapshots may contain a malformed timezone; keep the timestamp readable.
+    return new Intl.DateTimeFormat('id-ID', {
+      ...options,
+      timeZone: 'Asia/Jakarta',
+    }).format(dateVal);
+  }
 }
 
 export function BookingDetailModal({
