@@ -102,8 +102,8 @@ if ($script:failedStages.Count -eq 0) {
     Write-VerificationLog "OVERALL_RESULT = PASS"
 }
 else {
-    Write-VerificationLog ("OVERALL_RESULT = FAIL ({0} failed stage(s))" -f $script:failedStages.Count)
-    Write-VerificationLog ("FAILED_STAGES = {0}" -f ($script:failedStages -join ', '))
+    Write-VerificationLog ('OVERALL_RESULT = FAIL ({0} failed stage(s))' -f $script:failedStages.Count)
+    Write-VerificationLog ('FAILED_STAGES = {0}' -f ($script:failedStages -join ', '))
 }
 Write-VerificationLog "LOG_PATH = $logPath"
 
