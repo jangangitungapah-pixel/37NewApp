@@ -30,7 +30,13 @@ function Invoke-VerificationStage {
     $output = @()
     $LASTEXITCODE = 0
 
+    $originalErrorActionPreference = $ErrorActionPreference
+
     try {
+        # Native tools such as npm may write normal diagnostics to stderr.
+        # Keep those records in the captured output instead of terminating
+        # the stage before the native process has returned its real exit code.
+        $ErrorActionPreference = 'Continue'
         $output = @(& $Command 2>&1)
 
         if ($null -ne $LASTEXITCODE) {
@@ -40,6 +46,9 @@ function Invoke-VerificationStage {
     catch {
         $output += $_
         $stageExitCode = 1
+    }
+    finally {
+        $ErrorActionPreference = $originalErrorActionPreference
     }
 
     foreach ($item in $output) {
