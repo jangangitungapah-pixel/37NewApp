@@ -136,7 +136,6 @@ export function CreateBookingModal({
   const durationMinutes = watch('durationMinutes');
   const customerId = watch('customerId');
   const discountInput = watch('discountMinor');
-  const notes = watch('notes');
 
   const effectiveDuration = durationOptions.includes(Number(durationMinutes))
     ? Number(durationMinutes)
