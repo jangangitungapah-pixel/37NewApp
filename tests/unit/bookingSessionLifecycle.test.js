@@ -9,7 +9,10 @@ import {
   NO_SHOW_GRACE_MINUTES,
   resolveSessionStatus,
 } from '../../src/domain/validators/bookingSessionValidator.js';
-import { deriveSessionStatusFromBookingStatus } from '../../src/domain/validators/bookingValidator.js';
+import {
+  deriveSessionStatusFromBookingStatus,
+  isBookingBlockingAvailability,
+} from '../../src/domain/validators/bookingValidator.js';
 import { validateBookingSessionEventDoc } from '../../src/domain/validators/bookingSessionValidator.js';
 import { getOrCreateOperationContext } from '../../src/shared/utils/bookingOperationIds.js';
 
@@ -32,6 +35,16 @@ describe('Phase 10 booking/session lifecycle contracts', () => {
     expect(deriveSessionStatusFromBookingStatus(BOOKING_STATUS.CONFIRMED)).toBe(SESSION_STATUS.UPCOMING);
     expect(deriveSessionStatusFromBookingStatus(BOOKING_STATUS.IN_PROGRESS)).toBe(SESSION_STATUS.IN_PROGRESS);
     expect(deriveSessionStatusFromBookingStatus(BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT)).toBe(SESSION_STATUS.COMPLETED);
+  });
+
+  it('keeps availability blocking consistent for all booking terminal states', () => {
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.PENDING_CONFIRMATION })).toBe(true);
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.CONFIRMED })).toBe(true);
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT })).toBe(true);
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.SETTLED })).toBe(true);
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.CANCELLED })).toBe(false);
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.REJECTED })).toBe(false);
+    expect(isBookingBlockingAvailability({ status: BOOKING_STATUS.NO_SHOW })).toBe(false);
   });
 
   it('records check-in without starting the session and rejects duplicate check-in', () => {
@@ -184,6 +197,14 @@ describe('Phase 10 append-only session event contract', () => {
     ['invalid actor role', { actorRole: 'customer' }],
     ['malformed payload hash', { payloadHash: 'not-a-hash' }],
     ['missing operation ID', { operationId: '' }],
+    ['mismatched event and operation IDs', { operationId: 'other-operation' }],
+    ['short request ID', { requestId: 'tiny' }],
+    ['oversized actor name', { actorName: 'x'.repeat(121) }],
+    ['invalid action/status edge', {
+      action: SESSION_ACTION.START,
+      fromStatus: SESSION_STATUS.UPCOMING,
+      toStatus: SESSION_STATUS.UPCOMING,
+    }],
   ])('rejects an event with %s', (_label, patch) => {
     expect(() => validateBookingSessionEventDoc({ ...validEvent, ...patch })).toThrow();
   });
