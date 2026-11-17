@@ -698,7 +698,6 @@ service cloud.firestore {
                 && isValidCompleteSessionUpdate(oldData, newData, extraKeys)
               )
             )
-          )
           || (
             action in ['cancel', 'reject']
             && newData.cancelReason is string && newData.cancelReason.size() >= 3
