@@ -1,0 +1,497 @@
+PHASE 10 BOOKING/SESSION & FIRESTORE RULES VERIFICATION
+REPO_ROOT: C:\Users\hazel\source\repos\37NewApp
+LOG_FILE: C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules-20261117-171726.txt
+POWERSHELL_VERSION: 5.1.19041.6456
+========================================================================
+STAGE: PowerShell parser check
+STARTED_AT: 2026-11-17 17:17:26 +07:00
+PARSED_OK: C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules.ps1 (tokens=1720, errors=0)
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 0.04
+========================================================================
+STAGE: Branch guard
+STARTED_AT: 2026-11-17 17:17:26 +07:00
+COMMAND: git rev-parse --abbrev-ref HEAD
+RESOLVED_EXECUTABLE: C:\Program Files\Git\cmd\git.exe
+--- STDOUT ---
+feature/phase-10-booking-session-lifecycle
+PROCESS_EXIT_CODE: 0
+EXPECTED_BRANCH: feature/phase-10-booking-session-lifecycle
+CURRENT_BRANCH:  feature/phase-10-booking-session-lifecycle
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 0.21
+========================================================================
+STAGE: Runtime versions
+STARTED_AT: 2026-11-17 17:17:26 +07:00
+COMMAND: node --version
+RESOLVED_EXECUTABLE: C:\nvm4w\nodejs\node.exe
+--- STDOUT ---
+v24.19.0
+PROCESS_EXIT_CODE: 0
+COMMAND: npm --version
+RESOLVED_EXECUTABLE: C:\nvm4w\nodejs\npm.cmd
+--- STDOUT ---
+11.17.0
+PROCESS_EXIT_CODE: 0
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 0.56
+========================================================================
+STAGE: ESLint
+STARTED_AT: 2026-11-17 17:17:27 +07:00
+COMMAND: npm run lint
+RESOLVED_EXECUTABLE: C:\nvm4w\nodejs\npm.cmd
+--- STDOUT ---
+
+> 37musicstudio@0.1.0 lint
+> eslint .
+PROCESS_EXIT_CODE: 0
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 3.21
+========================================================================
+STAGE: Targeted booking/session unit tests
+STARTED_AT: 2026-11-17 17:17:30 +07:00
+COMMAND: npm run test:unit -- tests/unit/bookingSessionLifecycle.test.js tests/unit/bookingSlotAndValidator.test.js
+RESOLVED_EXECUTABLE: C:\nvm4w\nodejs\npm.cmd
+--- STDOUT ---
+
+> 37musicstudio@0.1.0 test:unit
+> vitest run --project unit tests/unit/bookingSessionLifecycle.test.js tests/unit/bookingSlotAndValidator.test.js
+
+
+ RUN  v3.2.7 C:/Users/hazel/source/repos/37NewApp
+
+ ✓ |unit| tests/unit/bookingSessionLifecycle.test.js (19 tests) 17ms
+ ✓ |unit| tests/unit/bookingSlotAndValidator.test.js (5 tests) 51ms
+
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+   Start at  17:17:32
+   Duration  3.03s (transform 200ms, setup 831ms, collect 1.01s, tests 68ms, environment 2.56s, prepare 370ms)
+PROCESS_EXIT_CODE: 0
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 4.86
+========================================================================
+STAGE: Firestore Rules emulator tests
+STARTED_AT: 2026-11-17 17:17:35 +07:00
+COMMAND: npm run test:rules
+RESOLVED_EXECUTABLE: C:\nvm4w\nodejs\npm.cmd
+--- STDOUT ---
+
+> 37musicstudio@0.1.0 test:rules
+> firebase emulators:exec --only firestore "vitest run --project rules"
+
+i  emulators: Starting emulators: firestore
+i  firestore: Firestore Emulator logging to firestore-debug.log
++  firestore: Firestore Emulator was started in standard edition.
++  firestore: Firestore Emulator UI websocket is running on 9150.
+i  Running script: vitest run --project rules
+
+ RUN  v3.2.7 C:/Users/hazel/source/repos/37NewApp
+
+ ✓ |rules| tests/rules/phase05.rules.test.js (2 tests) 7913ms
+   ✓ Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > enforces recipient-only notification read, MapDiff readAt-only mark read, and anti-delete  2025ms
+   ✓ Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > constrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock  593ms
+ ✓ |rules| tests/rules/phase01.rules.test.js (4 tests) 8413ms
+   ✓ Phase 01 Firestore Security Rules (Deny-by-Default) > denies all unauthenticated reads and writes  574ms
+   ✓ Phase 01 Firestore Security Rules (Deny-by-Default) > enforces Owner vs Operator permissions, denies self-elevation, and keeps Phase 02+ collections locked  633ms
+ ✓ |rules| tests/rules/phase04.rules.test.js (2 tests) 2992ms
+   ✓ Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > executes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes  509ms
+   ✓ Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > enforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks  351ms
+ ✓ |rules| tests/rules/phase03.rules.test.js (8 tests) 13734ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > creates booking + slot locks + operation marker atomically, releases them on cancel, and reclaims released slots only with a new booking  1834ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > documents the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set  333ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > supports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes  748ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff  510ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > cancels an already-started separate session without fabricating an end timestamp and releases owned slots  1600ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > enforces No-Show grace and releases the complete owned slot set atomically  520ms
+   ✓ Phase 10 booking/session Firestore Rules & atomic transactions > serializes concurrent overlapping creates and validates reschedule slot swaps with operation markers  1343ms
+ ✓ |rules| tests/rules/phase02.rules.test.js (5 tests) 3898ms
+   ✓ Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads  664ms
+   ✓ Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > strictly scopes studios to assignedStudioIds for Operators and dynamically reflects assignment revocation  340ms
+ ✓ |rules| tests/rules/phase07.rules.test.js (1 test) 3269ms
+   ✓ Phase 07 Spark-Safe Analytics Queries — Emulator Rules & Privacy Isolation > executes bounded Owner analytics queries and blocks cross-studio / ledger / other-operator leaks for Operators  652ms
+ ✓ |rules| tests/rules/phase06.rules.test.js (1 test) 3535ms
+   ✓ Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete  755ms
+
+ Test Files  7 passed (7)
+      Tests  23 passed (23)
+   Start at  17:17:43
+   Duration  19.38s (transform 197ms, setup 0ms, collect 3.34s, tests 43.75s, environment 2ms, prepare 1.60s)
+
++  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+!  Firestore Emulator has exited upon receiving signal: SIGINT
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator
+--- STDERR ---
+stderr | tests/rules/phase05.rules.test.js > Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > enforces recipient-only notification read, MapDiff readAt-only mark read, and anti-delete
+[2026-11-17T10:17:51.782Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x15ae6029 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1500:26 for 'update' @ L1500, false for 'update' @ L1562, false for 'update' @ L1500, false for 'update' @ L1562
+
+stderr | tests/rules/phase05.rules.test.js > Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > enforces recipient-only notification read, MapDiff readAt-only mark read, and anti-delete
+[2026-11-17T10:17:51.792Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x15ae6025 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1505, false for 'delete' @ L1562
+
+stderr | tests/rules/phase01.rules.test.js > Phase 01 Firestore Security Rules (Deny-by-Default) > denies all unauthenticated reads and writes
+[2026-11-17T10:17:51.890Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x7e9bbf74 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1077, false for 'create' @ L1562, false for 'update' @ L1081, false for 'update' @ L1562
+
+stderr | tests/rules/phase05.rules.test.js > Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > constrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[2026-11-17T10:17:51.958Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x15ae602b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1482:26 for 'create' @ L1482, false for 'create' @ L1562, evaluation error at L1500:26 for 'update' @ L1500, false for 'update' @ L1562, false for 'create' @ L1482, false for 'create' @ L1562
+
+stderr | tests/rules/phase05.rules.test.js > Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > constrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[2026-11-17T10:17:52.012Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x15ae602c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1482:26 for 'create' @ L1482, false for 'create' @ L1562, evaluation error at L1500:26 for 'update' @ L1500, false for 'update' @ L1562, false for 'create' @ L1482, false for 'create' @ L1562
+
+stderr | tests/rules/phase05.rules.test.js > Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > constrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[2026-11-17T10:17:52.046Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x15ae602d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1482:26 for 'create' @ L1482, false for 'create' @ L1562, evaluation error at L1500:26 for 'update' @ L1500, false for 'update' @ L1562, false for 'create' @ L1482, false for 'create' @ L1562
+
+stderr | tests/rules/phase01.rules.test.js > Phase 01 Firestore Security Rules (Deny-by-Default) > enforces user profile isolation and blocks permission field injection in users/{uid}
+[2026-11-17T10:17:52.079Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x7e9bbf77 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1077:24 for 'create' @ L1077, false for 'create' @ L1562, evaluation error at L1081:24 for 'update' @ L1081, false for 'update' @ L1562, false for 'create' @ L1077, false for 'create' @ L1562
+
+stderr | tests/rules/phase01.rules.test.js > Phase 01 Firestore Security Rules (Deny-by-Default) > allows atomic initial business + founder owner bootstrap and blocks rogue owner join
+[2026-11-17T10:17:52.239Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x7e9bbf79 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1130:26 for 'create' @ L1130, false for 'create' @ L1562, evaluation error at L1148:26 for 'update' @ L1148, false for 'update' @ L1562, false for 'create' @ L1130, false for 'create' @ L1562
+
+stderr | tests/rules/phase05.rules.test.js > Phase 05 Firestore Security Rules (Scoped Notifications & Activity Collaboration) > constrains Operator notification dispatch by studio scope/type and guards cross-portal activityLogs + Phase 06 lock
+[2026-11-17T10:17:52.386Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x15ae6031 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1562, false for 'update' @ L1562
+
+stderr | tests/rules/phase01.rules.test.js > Phase 01 Firestore Security Rules (Deny-by-Default) > enforces Owner vs Operator permissions, denies self-elevation, and keeps Phase 02+ collections locked
+[2026-11-17T10:17:52.580Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x7e9bbf7c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1148:26 for 'update' @ L1148, false for 'update' @ L1562, false for 'update' @ L1148, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > creates booking + slot locks + operation marker atomically, releases them on cancel, and reclaims released slots only with a new booking
+[2026-11-17T10:17:52.601Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5a7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1347:26 for 'update' @ L1347, false for 'update' @ L1562, false for 'update' @ L1347, false for 'update' @ L1562
+
+stderr | tests/rules/phase01.rules.test.js > Phase 01 Firestore Security Rules (Deny-by-Default) > enforces Owner vs Operator permissions, denies self-elevation, and keeps Phase 02+ collections locked
+[2026-11-17T10:17:52.619Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x7e9bbf7d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1148:26 for 'update' @ L1148, false for 'update' @ L1562, false for 'update' @ L1148, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > creates booking + slot locks + operation marker atomically, releases them on cancel, and reclaims released slots only with a new booking
+[2026-11-17T10:17:52.643Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5a8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1339:26 for 'create' @ L1339, false for 'create' @ L1562, evaluation error at L1347:26 for 'update' @ L1347, false for 'update' @ L1562, Null value error. for 'create' @ L1339, false for 'create' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > documents the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set
+[2026-11-17T10:17:53.518Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5c3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1339:26 for 'create' @ L1339, false for 'create' @ L1562, evaluation error at L1347:26 for 'update' @ L1347, false for 'update' @ L1562, false for 'create' @ L1339, false for 'create' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > supports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes
+[2026-11-17T10:17:54.266Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5e8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1562, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'create' @ L1318, false for 'create' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > supports 32-slot Operator reservations within assigned studio and denies unscoped or direct booking writes
+[2026-11-17T10:17:54.334Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5ea error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1318:26 for 'create' @ L1318, false for 'create' @ L1562, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'create' @ L1318, false for 'create' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.522Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5f2 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'update' @ L1320, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.550Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5f3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'update' @ L1320, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.749Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5fe error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1432, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.762Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce5ff error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1432, false for 'delete' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.780Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce600 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1410, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.794Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce601 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1410, false for 'delete' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.813Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce602 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1394, false for 'update' @ L1562
+
+stderr | tests/rules/phase03.rules.test.js > Phase 10 booking/session Firestore Rules & atomic transactions > requires session markers for check-in/start/complete and preserves Finance handoff
+[2026-11-17T10:17:54.826Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x649ce603 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1394, false for 'delete' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > executes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[2026-11-17T10:17:57.619Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47837 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'update' @ L1320, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > executes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[2026-11-17T10:17:57.665Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47838 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'update' @ L1320, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > executes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[2026-11-17T10:17:57.751Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b4783d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1442:26 for 'create' @ L1442, false for 'create' @ L1562, false for 'update' @ L1451, false for 'update' @ L1562, false for 'update' @ L1451, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > executes atomic Owner settlement with existsAfter ledger/commission link and prevents duplicate retry writes
+[2026-11-17T10:17:57.767Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b4783e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1320, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1562, false for 'update' @ L1320, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.866Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347377 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1176:26 for 'update' @ L1176, false for 'update' @ L1562, false for 'update' @ L1176, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > enforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[2026-11-17T10:17:57.905Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47841 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1451, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > enforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[2026-11-17T10:17:57.917Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47842 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1451, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.922Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347375 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1202:26 for 'update' @ L1202, false for 'update' @ L1562, false for 'update' @ L1202, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.933Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347379 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1202:26 for 'update' @ L1202, false for 'update' @ L1562, false for 'update' @ L1202, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > enforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[2026-11-17T10:17:57.936Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47843 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L1471, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.942Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34737a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1194, false for 'create' @ L1562, false for 'update' @ L1202, false for 'update' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > enforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[2026-11-17T10:17:57.948Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47844 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1471, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.953Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34737b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1194:26 for 'create' @ L1194, false for 'create' @ L1562, evaluation error at L1202:26 for 'update' @ L1202, false for 'update' @ L1562, false for 'create' @ L1194, false for 'create' @ L1562
+
+stderr | tests/rules/phase04.rules.test.js > Phase 04 Firestore Security Rules (Settlement, Immutable Ledger & Commission Privacy) > enforces ledger/commission immutability, adjustment parent checks, Operator commission privacy, and Phase 05+ locks
+[2026-11-17T10:17:57.976Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x48b47845 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1442:26 for 'create' @ L1442, false for 'create' @ L1562, false for 'update' @ L1451, false for 'update' @ L1562, false for 'create' @ L1442, false for 'create' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.990Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34737c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1202:26 for 'update' @ L1202, false for 'update' @ L1562, false for 'update' @ L1202, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:57.999Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34737d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1213, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > allows Owner to manage profile/main & 5 validated settings docs while blocking Operator writes & invalid payloads
+[2026-11-17T10:17:58.015Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34737e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1185, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > strictly scopes studios to assignedStudioIds for Operators and dynamically reflects assignment revocation
+[2026-11-17T10:17:58.141Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347381 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1248, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > strictly scopes studios to assignedStudioIds for Operators and dynamically reflects assignment revocation
+[2026-11-17T10:17:58.284Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347383 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1239:26 for 'update' @ L1239, false for 'update' @ L1562, false for 'update' @ L1239, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[2026-11-17T10:17:58.448Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347386 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1257:26 for 'create' @ L1257, false for 'create' @ L1562, evaluation error at L1264:26 for 'update' @ L1264, false for 'update' @ L1562, false for 'create' @ L1257, false for 'create' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[2026-11-17T10:17:58.460Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347387 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1257:26 for 'create' @ L1257, false for 'create' @ L1562, evaluation error at L1264:26 for 'update' @ L1264, false for 'update' @ L1562, false for 'create' @ L1257, false for 'create' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[2026-11-17T10:17:58.512Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347389 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1264:26 for 'update' @ L1264, false for 'update' @ L1562, false for 'update' @ L1264, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces integer IDR service validation, version monotonicity, and Owner-only mutation on services
+[2026-11-17T10:17:58.517Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34738a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1274, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces customer permission boundaries (Owner full sans delete; permitted Operator active-only without archive)
+[2026-11-17T10:17:58.637Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34738d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1291:26 for 'update' @ L1291, false for 'update' @ L1562, false for 'update' @ L1291, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces customer permission boundaries (Owner full sans delete; permitted Operator active-only without archive)
+[2026-11-17T10:17:58.651Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34738e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1283:26 for 'create' @ L1283, false for 'create' @ L1562, evaluation error at L1291:26 for 'update' @ L1291, false for 'update' @ L1562, false for 'create' @ L1283, false for 'create' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces customer permission boundaries (Owner full sans delete; permitted Operator active-only without archive)
+[2026-11-17T10:17:58.691Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c34738f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1301, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[2026-11-17T10:17:58.776Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347391 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1148:26 for 'update' @ L1148, false for 'update' @ L1562, false for 'update' @ L1148, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[2026-11-17T10:17:58.784Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347392 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1148:26 for 'update' @ L1148, false for 'update' @ L1562, false for 'update' @ L1148, false for 'update' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[2026-11-17T10:17:58.804Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347393 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1158, false for 'delete' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[2026-11-17T10:17:58.827Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347394 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1130:26 for 'create' @ L1130, false for 'create' @ L1562, evaluation error at L1148:26 for 'update' @ L1148, false for 'update' @ L1562, false for 'create' @ L1130, false for 'create' @ L1562
+
+stderr | tests/rules/phase02.rules.test.js > Phase 02 Firestore Security Rules (Master Data, Scoping & Invariants) > enforces team member assignment, anti-self-demotion, and locks Phase 03+ subcollections
+[2026-11-17T10:17:58.853Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x6c347396 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L1562, false for 'update' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.605Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e42 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1514:26 for 'create' @ L1514, false for 'create' @ L1562, evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'create' @ L1514, false for 'create' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.683Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e44 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1514:26 for 'create' @ L1514, false for 'create' @ L1562, evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'create' @ L1514, false for 'create' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.696Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e3f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1514:26 for 'create' @ L1514, false for 'create' @ L1562, evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'create' @ L1514, false for 'create' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.734Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e45 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1514:26 for 'create' @ L1514, false for 'create' @ L1562, evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'create' @ L1514, false for 'create' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.752Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e40 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1514:26 for 'create' @ L1514, false for 'create' @ L1562, evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'create' @ L1514, false for 'create' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.804Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e46 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'update' @ L1523, false for 'update' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.816Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e47 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'update' @ L1523, false for 'update' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.827Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e48 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L1523:26 for 'update' @ L1523, false for 'update' @ L1562, false for 'update' @ L1523, false for 'update' @ L1562
+
+stderr | tests/rules/phase06.rules.test.js > Phase 06 Firestore Security Rules — Gallery Assets > enforces canManageGallery create, active-member read, outsider isolation, Cloudinary URL prefix, immutable binary fields, Owner-only archive, and no permanent delete
+[2026-11-17T10:18:02.867Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x36e34e49 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L1556, false for 'delete' @ L1562
+PROCESS_EXIT_CODE: 0
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 28.4
+========================================================================
+STAGE: Production build
+STARTED_AT: 2026-11-17 17:18:04 +07:00
+COMMAND: npm run build
+RESOLVED_EXECUTABLE: C:\nvm4w\nodejs\npm.cmd
+--- STDOUT ---
+
+> 37musicstudio@0.1.0 build
+> vite build
+
+vite v6.4.6 building for production...
+transforming...
+✓ 3158 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                           2.28 kB │ gzip:   0.94 kB
+dist/assets/inter-latin-400-normal-C38fXH4l.woff2        23.66 kB
+dist/assets/inter-latin-500-normal-Cerq10X2.woff2        24.27 kB
+dist/assets/inter-latin-700-normal-Yt3aPRUw.woff2        24.36 kB
+dist/assets/inter-latin-600-normal-LgqL8muc.woff2        24.45 kB
+dist/assets/inter-latin-400-normal-CyCys3Eg.woff         30.70 kB
+dist/assets/inter-latin-600-normal-CiBQ2DWP.woff         31.26 kB
+dist/assets/inter-latin-500-normal-BL9OpVg8.woff         31.28 kB
+dist/assets/inter-latin-700-normal-BLAVimhd.woff         31.32 kB
+dist/assets/geist-sans-latin-400-normal-gapTbOY8.woff2   33.40 kB
+dist/assets/geist-sans-latin-500-normal-uokXdC-Q.woff2   34.72 kB
+dist/assets/geist-sans-latin-600-normal-DFOURf8L.woff2   35.29 kB
+dist/assets/geist-sans-latin-700-normal-BmN9tIp5.woff2   35.48 kB
+dist/assets/geist-sans-latin-400-normal-BOaIZNA2.woff    38.91 kB
+dist/assets/geist-sans-latin-500-normal-CN2lyvyL.woff    40.52 kB
+dist/assets/geist-sans-latin-600-normal-CA1yjETN.woff    41.20 kB
+dist/assets/geist-sans-latin-700-normal-CjScfYeH.woff    41.40 kB
+dist/assets/index-_zo5kw8X.css                           68.28 kB │ gzip:  12.78 kB
+dist/assets/ModalDialog-V_GNe7eV.js                       1.21 kB │ gzip:   0.66 kB
+dist/assets/SessionSecurityProfilePage-PfbcTrdc.js        3.48 kB │ gzip:   1.10 kB
+dist/assets/OperatorRoutes-DNuV2dih.js                    3.85 kB │ gzip:   1.31 kB
+dist/assets/OwnerRoutes-CYMMwHVQ.js                       4.43 kB │ gzip:   1.47 kB
+dist/assets/OperatorCommissionsPage-C1NQ3c8G.js           4.65 kB │ gzip:   1.81 kB
+dist/assets/ActivityTimelinePage-CJTwyKfy.js              5.42 kB │ gzip:   2.07 kB
+dist/assets/masterDataUseCases-BfTdqC78.js                7.80 kB │ gzip:   2.86 kB
+dist/assets/CustomersPage-CUEPcB8o.js                     9.02 kB │ gzip:   2.96 kB
+dist/assets/financeRepository-4KwU1sR2.js                 9.08 kB │ gzip:   2.81 kB
+dist/assets/StudiosPage-BcRJe_9K.js                       9.58 kB │ gzip:   3.01 kB
+dist/assets/TeamManagementPage-C2ixidOD.js               10.01 kB │ gzip:   3.30 kB
+dist/assets/bookingStatusUi-mbsgtCto.js                  14.08 kB │ gzip:   4.14 kB
+dist/assets/BusinessSettingsPage-93EciH7a.js             15.93 kB │ gzip:   3.91 kB
+dist/assets/ServicesPricingPage-DOFvffvd.js              16.05 kB │ gzip:   4.70 kB
+dist/assets/FinanceSettlementPage-BDwcV51k.js            28.85 kB │ gzip:   7.11 kB
+dist/assets/GalleryPage-DgObNSaT.js                      32.20 kB │ gzip:   9.80 kB
+dist/assets/ui-icons-BeKi096X.js                         36.90 kB │ gzip:   7.81 kB
+dist/assets/BookingCalendarPage-ZZK5MSk-.js              66.59 kB │ gzip:  19.37 kB
+dist/assets/index-BpKeLCNn.js                            76.02 kB │ gzip:  24.22 kB
+dist/assets/ui-primitives-B2e4XTmc.js                    84.50 kB │ gzip:  26.56 kB
+dist/assets/PortalShell-A7jJiXPu.js                     115.28 kB │ gzip:  31.14 kB
+dist/assets/ui-motion-B2LJzkVk.js                       141.06 kB │ gzip:  48.08 kB
+dist/assets/ui-forms-data-BCe3R1RA.js                   151.02 kB │ gzip:  46.04 kB
+dist/assets/firebase-core-hgK3uR3Y.js                   251.01 kB │ gzip:  61.13 kB
+dist/assets/firebase-firestore-DYyle2Xw.js              267.83 kB │ gzip:  61.08 kB
+dist/assets/react-vendor-BoOfFQo3.js                    395.12 kB │ gzip: 129.26 kB
+✓ built in 11.15s
+--- STDERR ---
+node_modules/zod/v4/core/regexes.js (74:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+PROCESS_EXIT_CODE: 0
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 12.98
+========================================================================
+STAGE: Final Git status and HEAD
+STARTED_AT: 2026-11-17 17:18:17 +07:00
+COMMAND: git status --short --branch
+RESOLVED_EXECUTABLE: C:\Program Files\Git\cmd\git.exe
+--- STDOUT ---
+## feature/phase-10-booking-session-lifecycle...origin/feature/phase-10-booking-session-lifecycle
+?? verify-phase10-booking-rules-20261117-171726.txt
+PROCESS_EXIT_CODE: 0
+COMMAND: git rev-parse HEAD
+RESOLVED_EXECUTABLE: C:\Program Files\Git\cmd\git.exe
+--- STDOUT ---
+1822a231278d1607b3b4cf0a769eea3cf0889c4f
+PROCESS_EXIT_CODE: 0
+STAGE_RESULT: PASS
+EXIT_CODE: 0
+DURATION_SECONDS: 0.19
+========================================================================
+VERIFICATION SUMMARY
+  - PowerShell parser check: STATUS=PASS, EXIT_CODE=0, DURATION=0.04s
+  - Branch guard: STATUS=PASS, EXIT_CODE=0, DURATION=0.21s
+  - Runtime versions: STATUS=PASS, EXIT_CODE=0, DURATION=0.56s
+  - ESLint: STATUS=PASS, EXIT_CODE=0, DURATION=3.21s
+  - Targeted booking/session unit tests: STATUS=PASS, EXIT_CODE=0, DURATION=4.86s
+  - Firestore Rules emulator tests: STATUS=PASS, EXIT_CODE=0, DURATION=28.4s
+  - Production build: STATUS=PASS, EXIT_CODE=0, DURATION=12.98s
+  - Final Git status and HEAD: STATUS=PASS, EXIT_CODE=0, DURATION=0.19s
+LOG_FILE: C:\Users\hazel\source\repos\37NewApp\verify-phase10-booking-rules-20261117-171726.txt
+OVERALL_RESULT = PASS
