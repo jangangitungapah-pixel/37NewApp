@@ -166,7 +166,12 @@ export function BookingDetailModal({
     [member.businessId, booking.studioId, booking.bookingId],
   );
 
-  const { data: sessionEvents } = useRegistrySubscription(
+  const {
+    data: sessionEvents,
+    loading: sessionEventsLoading,
+    error: sessionEventsError,
+    fromCache: sessionEventsFromCache,
+  } = useRegistrySubscription(
     'phase10:detail:session-events',
     subscribeSessionEvents,
     [],
@@ -302,7 +307,7 @@ export function BookingDetailModal({
         isOnline,
       });
       onMutated?.(
-        `Booking di-reschedule ke ${updated.dateKey} ${updated.startTime}–${updated.endTime} WIB.`,
+        `Booking di-reschedule ke ${updated.dateKey} ${updated.startTime}–${updated.endTime} (${updated.timezone || timezone}).`,
         updated,
       );
       onClose();
@@ -741,8 +746,26 @@ export function BookingDetailModal({
             <span>Riwayat Sesi (Append-Only)</span>
             <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{sessionEvents.length}</span>
           </div>
-          {sessionEvents.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Belum ada aksi sesi yang tercatat.</p>
+          {sessionEventsError && (
+            <StatusAlert
+              variant="danger"
+              title="Riwayat Sesi Tidak Dapat Dimuat"
+              message={sessionEventsError.message || 'Listener riwayat sesi gagal tersambung.'}
+            />
+          )}
+          {sessionEventsFromCache && (
+            <StatusAlert
+              variant="warning"
+              title="Riwayat dari Cache"
+              message="Riwayat sesi berasal dari cache lokal; perubahan terbaru mungkin belum tersinkron."
+            />
+          )}
+          {sessionEventsLoading && sessionEvents.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Memuat riwayat sesi...</p>
+          ) : sessionEvents.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {sessionEventsError ? 'Riwayat belum tersedia karena listener gagal.' : 'Belum ada aksi sesi yang tercatat.'}
+            </p>
           ) : (
             <div className="grid gap-2">
               {sessionEvents.map((event) => (
