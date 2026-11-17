@@ -203,11 +203,14 @@ export function BookingCalendarPage() {
   const filteredBookings = useMemo(() => {
     return rawBookings.filter((booking) => {
       const matchesBookingStatus = statusFilter === 'active_all'
-        ? ![
-            BOOKING_STATUS.CANCELLED,
-            BOOKING_STATUS.NO_SHOW,
-            BOOKING_STATUS.REJECTED,
-          ].includes(booking.status)
+        ? (
+            sessionStatusFilter !== 'all'
+            || ![
+              BOOKING_STATUS.CANCELLED,
+              BOOKING_STATUS.NO_SHOW,
+              BOOKING_STATUS.REJECTED,
+            ].includes(booking.status)
+          )
         : statusFilter === 'all' || booking.status === statusFilter;
 
       const matchesSessionStatus = sessionStatusFilter === 'all'
