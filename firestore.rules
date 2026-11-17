@@ -111,6 +111,7 @@ service cloud.firestore {
         && operationData.requestId is string
         && operationData.payloadHash == data.get('lastOperationPayloadHash', null);
     }
+
     function hasMatchingBookingSessionEventAfter(businessId, bookingId, studioId, data, fromStatus) {
       let eventId = data.get('lastSessionEventId', null);
       let eventPath = bookingSessionEventPath(businessId, eventId is string ? eventId : '__invalid__');
@@ -147,7 +148,9 @@ service cloud.firestore {
         && bookingData.lastOperationType in operationTypes
         && bookingData.updatedBy == request.auth.uid
         && bookingData.updatedAt == request.time;
-    }    function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId, slotData) {
+    }
+
+    function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId, slotData) {
       let targetBooking = bookingPath(businessId, bookingId);
       let bookingExists = existsAfter(targetBooking);
       let bookingData = bookingExists ? getAfter(targetBooking).data : {};
@@ -792,15 +795,26 @@ service cloud.firestore {
         ])
         && data.slotId == slotId
         && data.businessId == businessId
+        && data.studioId is string
+        && data.studioId.size() >= 1
+        && data.dateKey is string
+        && data.dateKey.size() == 10
+        && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && data.bucketIndex is int
         && data.bucketIndex >= 0
         && data.bucketIndex <= 95
         && slotId == data.studioId + '__' + data.dateKey + '__' + (data.bucketIndex < 10 ? '0' + string(data.bucketIndex) : string(data.bucketIndex))
         && data.slotTime is string
+        && data.slotTime.size() == 5
+        && data.slotTime.matches('^([01][0-9]|2[0-3]):(00|15|30|45)')
         && data.kind in ['session', 'buffer']
         && data.slotStartAt is timestamp
         && data.slotEndAt is timestamp
-        && data.slotEndAt > data.slotStartAt;
+        && data.slotEndAt > data.slotStartAt
+        && data.reservedBy is string
+        && data.reservedBy.size() >= 1
+        && data.schemaVersion is int
+        && data.schemaVersion >= 1;
     }
     function isValidActivityLogData(data, businessId, eventId) {
       return data.keys().hasOnly([
