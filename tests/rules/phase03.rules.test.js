@@ -459,6 +459,54 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
     expect(cancelEvent.exists()).toBe(true);
   });
 
+  it('rejects an initial booking/session status mismatch even when the operation marker matches the written document', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const bookingId = 'bk-invalid-initial-session-state';
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '20:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+    });
+    const operationContext = makeOperationContext({
+      bookingId,
+      studioId: 'studio-a',
+      actorUid: OWNER_UID,
+      actorRole: 'owner',
+      operationType: 'booking.create',
+      action: 'create',
+      resultBookingStatus: 'CONFIRMED',
+      resultSessionStatus: 'COMPLETED',
+    });
+
+    await assertFails(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', bookingId);
+      const operationRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId);
+      const [bookingSnap, operationSnap] = await Promise.all([
+        tx.get(bookingRef),
+        tx.get(operationRef),
+      ]);
+      expect(bookingSnap.exists()).toBe(false);
+      expect(operationSnap.exists()).toBe(false);
+
+      tx.set(bookingRef, {
+        ...makeBookingPayload({
+          bookingId,
+          studioId: 'studio-a',
+          actorUid: OWNER_UID,
+          slotPlan: plan,
+          operationContext,
+        }),
+        sessionStatus: 'COMPLETED',
+      });
+      tx.set(operationRef, operationContext.marker);
+    }));
+
+    expect((await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookings', bookingId))).exists()).toBe(false);
+    expect((await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingOperations', operationContext.operationId))).exists()).toBe(false);
+  });
+
   it('documents the accepted Option A residual risk: a trusted member can directly write a booking and marker without the complete slot set', async () => {
     const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
     const plan = computeBookingSlotPlan({
