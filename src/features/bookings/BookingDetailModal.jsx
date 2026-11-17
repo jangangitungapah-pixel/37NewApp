@@ -91,7 +91,7 @@ export function BookingDetailModal({
 
   const [mode, setMode] = useState('view'); // 'view' | 'reschedule' | 'cancel' | 'no_show' | 'reject'
   const sessionStatus = useMemo(() => resolveSessionStatus(booking), [booking.sessionStatus, booking.status]);
-  const timezone = booking.timezone || studio?.timezone || 'Asia/Jakarta';
+  const timezone = booking.timezone || booking.studioSnapshot?.timezone || studio?.timezone || 'Asia/Jakarta';
   const scheduledStartMs = booking.startAt instanceof Date
     ? booking.startAt.getTime()
     : booking.startAt?.toDate?.()?.getTime?.() || 0;
