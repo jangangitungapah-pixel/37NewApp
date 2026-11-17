@@ -225,7 +225,8 @@ describe('Phase 03 Booking Slot Generator, State Machine & Validators', () => {
 
   it('enforces strict booking lifecycle transitions, slot schema, and activity log schema', () => {
     expect(canTransitionBookingStatus(BOOKING_STATUS.PENDING_CONFIRMATION, BOOKING_STATUS.CONFIRMED)).toBe(true);
-    expect(canTransitionBookingStatus(BOOKING_STATUS.CONFIRMED, BOOKING_STATUS.IN_PROGRESS)).toBe(true);
+    // Session start is tracked by SESSION_STATUS; booking status remains CONFIRMED.
+    expect(canTransitionBookingStatus(BOOKING_STATUS.CONFIRMED, BOOKING_STATUS.IN_PROGRESS)).toBe(false);
     expect(canTransitionBookingStatus(BOOKING_STATUS.IN_PROGRESS, BOOKING_STATUS.COMPLETED_PENDING_SETTLEMENT)).toBe(true);
     expect(canTransitionBookingStatus(BOOKING_STATUS.CONFIRMED, BOOKING_STATUS.SETTLED)).toBe(false);
     expect(canTransitionBookingStatus(BOOKING_STATUS.CANCELLED, BOOKING_STATUS.CONFIRMED)).toBe(false);
