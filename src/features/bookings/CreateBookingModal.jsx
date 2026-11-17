@@ -197,7 +197,7 @@ export function CreateBookingModal({
     return () => {
       active = false;
     };
-  }, [member, customerWriteAllowed]);
+  }, [member, customerWriteAllowed, setValue]);
 
   const subscribeDaySlots = useCallback(
     ({ onData, onError }) => {
@@ -238,9 +238,9 @@ export function CreateBookingModal({
     try {
       const slotPlan = computeBookingSlotPlan({
         studioId: selectedStudio.studioId,
-        dateKey: values.dateKey,
-        startTime: values.startTime,
-        durationMinutes: Number(values.durationMinutes),
+        dateKey,
+        startTime: effectiveStartTime,
+        durationMinutes: effectiveDuration,
         bufferMinutes: scheduleSetting?.bufferMinutes ?? 0,
         timezone: tz,
         operatingHours: selectedStudio.operatingHours,
@@ -248,7 +248,7 @@ export function CreateBookingModal({
           selectedStudio.slotGranularityMinutes || scheduleSetting?.slotGranularityMinutes || 15,
       });
 
-      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(values.discountMinor || 0))) : 0;
+      const discountMinor = discountAllowed ? Math.max(0, Math.trunc(Number(discountInput || 0))) : 0;
       const priceSnapshot = calculateServicePrice({
         service: selectedService,
         durationMinutes: effectiveDuration,
