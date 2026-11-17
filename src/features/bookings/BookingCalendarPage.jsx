@@ -34,6 +34,7 @@ import {
   filterAccessibleStudios,
 } from '../../domain/policies/accessPolicy.js';
 import { parseTimeToMinutes } from '../../domain/validators/masterDataValidators.js';
+import { resolveSessionStatus } from '../../domain/validators/bookingSessionValidator.js';
 import { Button } from '../../components/ui/Button.jsx';
 import { Input } from '../../components/ui/Input.jsx';
 import { SelectField } from '../../components/ui/SelectField.jsx';
@@ -42,7 +43,7 @@ import { useRegistrySubscription } from '../../shared/hooks/useRegistrySubscript
 import { formatIdr, formatOperatingHours } from '../../shared/utils/formatters.js';
 import { BookingDetailModal } from './BookingDetailModal.jsx';
 import { CreateBookingModal } from './CreateBookingModal.jsx';
-import { getBookingStatusMeta } from './bookingStatusUi.js';
+import { getBookingStatusMeta, getSessionStatusMeta } from './bookingStatusUi.js';
 
 export function BookingCalendarPage() {
   const { member, business, isOnline } = useAuthSession();
@@ -483,7 +484,7 @@ export function BookingCalendarPage() {
           <table className="calendar-grid-table">
             <thead>
               <tr>
-                <th className="calendar-grid-time-col">Jam WIB</th>
+                <th className="calendar-grid-time-col">Jam ({tz})</th>
                 {desktopColumns.map((col) => (
                   <th
                     key={col.key}
@@ -534,6 +535,8 @@ export function BookingCalendarPage() {
                           )}
                           {cellBookings.map((b) => {
                             const meta = getBookingStatusMeta(b.status);
+              const sessionMeta = getSessionStatusMeta(resolveSessionStatus(b));
+                            const sessionMeta = getSessionStatusMeta(resolveSessionStatus(b));
                             return (
                               <button
                                 key={b.bookingId}
@@ -556,7 +559,7 @@ export function BookingCalendarPage() {
                                   {b.customerSnapshot?.name}
                                 </strong>
                                 <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                  {b.serviceSnapshot?.name} · {meta.label}
+                                  {b.serviceSnapshot?.name} · Booking: {meta.label} · Sesi: {sessionMeta.label}
                                 </span>
                               </button>
                             );
@@ -655,9 +658,10 @@ export function BookingCalendarPage() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     <span className="mono" style={{ fontWeight: 700, fontSize: '13px', color: 'var(--accent-brass)' }}>
-                      {b.startTime}–{b.endTime} WIB ({b.durationMinutes}m)
+                      {b.startTime}–{b.endTime} ({b.timezone || tz}) · {b.durationMinutes} menit
                     </span>
-                    <span className={`badge ${meta.badgeClass}`}>{meta.label}</span>
+                    <span className={`badge ${meta.badgeClass}`}>Booking · {meta.label}</span>
+                    <span className={`badge ${sessionMeta.badgeClass}`}>Sesi · {sessionMeta.label}</span>
                   </div>
                   <strong style={{ fontSize: '15px', color: 'var(--text-primary)' }}>
                     {b.customerSnapshot?.name}
@@ -689,7 +693,7 @@ export function BookingCalendarPage() {
             setFeedback({
               variant: 'success',
               title: 'Booking Berhasil Dibuat',
-              message: `${created.customerSnapshot.name} pada ${created.dateKey} ${created.startTime}–${created.endTime} WIB (${created.slotIds.length} slot terkunci).`,
+              message: `${created.customerSnapshot.name} pada ${created.dateKey} ${created.startTime}–${created.endTime} (${created.timezone || tz}) (${created.slotIds.length} slot terkunci).`,
             })
           }
         />
