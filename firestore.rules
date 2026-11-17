@@ -96,85 +96,140 @@ service cloud.firestore {
 
     function hasMatchingBookingOperationAfter(businessId, bookingId, studioId, data, operationType) {
       let operationId = data.get('lastOperationId', null);
-      return operationId is string
-        && existsAfter(bookingOperationPath(businessId, operationId))
-        && getAfter(bookingOperationPath(businessId, operationId)).data.operationId == operationId
-        && getAfter(bookingOperationPath(businessId, operationId)).data.businessId == businessId
-        && getAfter(bookingOperationPath(businessId, operationId)).data.bookingId == bookingId
-        && getAfter(bookingOperationPath(businessId, operationId)).data.studioId == studioId
-        && getAfter(bookingOperationPath(businessId, operationId)).data.operationType == operationType
-        && getAfter(bookingOperationPath(businessId, operationId)).data.actorUid == request.auth.uid
-        && getAfter(bookingOperationPath(businessId, operationId)).data.actorRole == currentMember(businessId).role
-        && getAfter(bookingOperationPath(businessId, operationId)).data.requestId is string
-        && getAfter(bookingOperationPath(businessId, operationId)).data.payloadHash == data.get('lastOperationPayloadHash', null);
+      let operationPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
+      let operationExists = operationId is string && existsAfter(operationPath);
+      let operationData = operationExists ? getAfter(operationPath).data : {};
+      let memberData = currentMember(businessId);
+      return operationExists
+        && operationData.operationId == operationId
+        && operationData.businessId == businessId
+        && operationData.bookingId == bookingId
+        && operationData.studioId == studioId
+        && operationData.operationType == operationType
+        && operationData.actorUid == request.auth.uid
+        && operationData.actorRole == memberData.role
+        && operationData.requestId is string
+        && operationData.payloadHash == data.get('lastOperationPayloadHash', null);
     }
-
     function hasMatchingBookingSessionEventAfter(businessId, bookingId, studioId, data, fromStatus) {
       let eventId = data.get('lastSessionEventId', null);
-      return eventId is string
-        && existsAfter(bookingSessionEventPath(businessId, eventId))
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.eventId == eventId
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.operationId == eventId
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.businessId == businessId
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.bookingId == bookingId
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.studioId == studioId
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.action == data.get('lastSessionEventType', null)
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.fromStatus == fromStatus
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.toStatus == data.sessionStatus
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.actorUid == request.auth.uid
-        && getAfter(bookingSessionEventPath(businessId, eventId)).data.actorRole == currentMember(businessId).role;
+      let eventPath = bookingSessionEventPath(businessId, eventId is string ? eventId : '__invalid__');
+      let eventExists = eventId is string && existsAfter(eventPath);
+      let eventData = eventExists ? getAfter(eventPath).data : {};
+      let memberData = currentMember(businessId);
+      return eventExists
+        && eventData.eventId == eventId
+        && eventData.operationId == eventId
+        && eventData.businessId == businessId
+        && eventData.bookingId == bookingId
+        && eventData.studioId == studioId
+        && eventData.action == data.get('lastSessionEventType', null)
+        && eventData.fromStatus == fromStatus
+        && eventData.toStatus == data.sessionStatus
+        && eventData.actorUid == request.auth.uid
+        && eventData.actorRole == memberData.role;
     }
-
     function hasMatchingSlotReservationAfter(businessId, bookingId, studioId, slotId, operationTypes) {
       let targetBooking = bookingPath(businessId, bookingId);
-      return existsAfter(targetBooking)
+      let bookingExists = existsAfter(targetBooking);
+      let bookingData = bookingExists ? getAfter(targetBooking).data : {};
+      let operationId = bookingData.get('lastOperationId', null);
+      let operationPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
+      let operationExists = operationId is string && existsAfter(operationPath);
+      let operationData = operationExists ? getAfter(operationPath).data : {};
+      let memberData = currentMember(businessId);
+      return bookingExists
         && bookingId is string
-        && getAfter(targetBooking).data.bookingId == bookingId
-        && getAfter(targetBooking).data.businessId == businessId
-        && getAfter(targetBooking).data.studioId == studioId
-        && getAfter(targetBooking).data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-        && getAfter(targetBooking).data.slotIds is list
-        && getAfter(targetBooking).data.slotIds.hasAny([slotId])
-        && getAfter(targetBooking).data.lastOperationId is string
-        && existsAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId))
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationId == getAfter(targetBooking).data.lastOperationId
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.bookingId == bookingId
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.studioId == studioId
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationType in operationTypes
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorUid == request.auth.uid
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorRole == currentMember(businessId).role
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.payloadHash == getAfter(targetBooking).data.lastOperationPayloadHash;
+        && bookingData.bookingId == bookingId
+        && bookingData.businessId == businessId
+        && bookingData.studioId == studioId
+        && bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+        && bookingData.slotIds is list
+        && bookingData.slotIds.hasAny([slotId])
+        && operationExists
+        && operationData.operationId == operationId
+        && operationData.bookingId == bookingId
+        && operationData.studioId == studioId
+        && operationData.operationType in operationTypes
+        && operationData.actorUid == request.auth.uid
+        && operationData.actorRole == memberData.role
+        && operationData.payloadHash == bookingData.lastOperationPayloadHash;
     }
-
     function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId) {
       let targetBooking = bookingPath(businessId, bookingId);
-      return existsAfter(targetBooking)
+      let bookingExists = existsAfter(targetBooking);
+      let bookingData = bookingExists ? getAfter(targetBooking).data : {};
+      let operationId = bookingData.get('lastOperationId', null);
+      let operationPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
+      let operationExists = operationId is string && existsAfter(operationPath);
+      let operationData = operationExists ? getAfter(operationPath).data : {};
+      let memberData = currentMember(businessId);
+      return bookingExists
         && bookingId is string
-        && getAfter(targetBooking).data.bookingId == bookingId
-        && getAfter(targetBooking).data.businessId == businessId
-        && getAfter(targetBooking).data.studioId == studioId
-        && getAfter(targetBooking).data.lastOperationId is string
-        && existsAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId))
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.bookingId == bookingId
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.studioId == studioId
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorUid == request.auth.uid
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.actorRole == currentMember(businessId).role
-        && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.payloadHash == getAfter(targetBooking).data.lastOperationPayloadHash
+        && bookingData.bookingId == bookingId
+        && bookingData.businessId == businessId
+        && bookingData.studioId == studioId
+        && operationExists
+        && operationData.bookingId == bookingId
+        && operationData.studioId == studioId
+        && operationData.actorUid == request.auth.uid
+        && operationData.actorRole == memberData.role
+        && operationData.payloadHash == bookingData.lastOperationPayloadHash
         && (
           (
-            getAfter(targetBooking).data.status in ['CANCELLED', 'REJECTED', 'NO_SHOW']
-            && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationType == 'booking.session'
+            bookingData.status in ['CANCELLED', 'REJECTED', 'NO_SHOW']
+            && operationData.operationType == 'booking.session'
           )
           || (
-            getAfter(targetBooking).data.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-            && getAfter(targetBooking).data.slotIds is list
-            && !getAfter(targetBooking).data.slotIds.hasAny([slotId])
-            && getAfter(bookingOperationPath(businessId, getAfter(targetBooking).data.lastOperationId)).data.operationType == 'booking.reschedule'
+            bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
+            && bookingData.slotIds is list
+            && !bookingData.slotIds.hasAny([slotId])
+            && operationData.operationType == 'booking.reschedule'
           )
         );
     }
 
 
+    function hasMatchingBookingOperationDocumentAfter(businessId, operationId, data) {
+      let targetBooking = bookingPath(businessId, data.bookingId);
+      let bookingExists = existsAfter(targetBooking);
+      let bookingData = bookingExists ? getAfter(targetBooking).data : {};
+      let eventPath = bookingSessionEventPath(businessId, operationId);
+      let eventExists = data.operationType == 'booking.session' && existsAfter(eventPath);
+      let eventData = eventExists ? getAfter(eventPath).data : {};
+      return bookingExists
+        && bookingData.lastOperationId == operationId
+        && bookingData.lastOperationType == data.operationType
+        && bookingData.lastOperationPayloadHash == data.payloadHash
+        && bookingData.status == data.resultBookingStatus
+        && (!('sessionStatus' in bookingData) || bookingData.sessionStatus == data.resultSessionStatus)
+        && (
+          data.operationType != 'booking.session'
+          || (
+            eventExists
+            && eventData.operationId == operationId
+            && eventData.bookingId == data.bookingId
+            && eventData.action == data.action
+          )
+        );
+    }
+
+    function hasMatchingBookingSessionEventDocumentAfter(businessId, eventId, data) {
+      let targetBooking = bookingPath(businessId, data.bookingId);
+      let bookingExists = existsAfter(targetBooking);
+      let bookingData = bookingExists ? getAfter(targetBooking).data : {};
+      let operationPath = bookingOperationPath(businessId, eventId);
+      let operationExists = existsAfter(operationPath);
+      let operationData = operationExists ? getAfter(operationPath).data : {};
+      return bookingExists
+        && bookingData.lastSessionEventId == eventId
+        && bookingData.lastSessionEventType == data.action
+        && bookingData.sessionStatus == data.toStatus
+        && operationExists
+        && operationData.operationType == 'booking.session'
+        && operationData.actorUid == request.auth.uid
+        && operationData.payloadHash == data.payloadHash;
+    }
 
     function isValidRole(role) {
       return role in ['owner', 'operator'];
@@ -1386,24 +1441,7 @@ service cloud.firestore {
           && request.resource.data.schemaVersion is int
           && request.resource.data.schemaVersion >= 1
           && request.resource.data.createdAt == request.time
-          && existsAfter(bookingPath(businessId, request.resource.data.bookingId))
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.lastOperationId == operationId
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.lastOperationType == request.resource.data.operationType
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.lastOperationPayloadHash == request.resource.data.payloadHash
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.status == request.resource.data.resultBookingStatus
-          && (
-            !('sessionStatus' in getAfter(bookingPath(businessId, request.resource.data.bookingId)).data)
-            || getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.sessionStatus == request.resource.data.resultSessionStatus
-          )
-          && (
-            request.resource.data.operationType != 'booking.session'
-            || (
-              existsAfter(bookingSessionEventPath(businessId, operationId))
-              && getAfter(bookingSessionEventPath(businessId, operationId)).data.operationId == operationId
-              && getAfter(bookingSessionEventPath(businessId, operationId)).data.bookingId == request.resource.data.bookingId
-              && getAfter(bookingSessionEventPath(businessId, operationId)).data.action == request.resource.data.action
-            )
-          );
+          && hasMatchingBookingOperationDocumentAfter(businessId, operationId, request.resource.data);
 
         allow update, delete: if false;
       }
@@ -1461,14 +1499,7 @@ service cloud.firestore {
           && request.resource.data.schemaVersion is int
           && request.resource.data.schemaVersion >= 1
           && request.resource.data.createdAt == request.time
-          && existsAfter(bookingPath(businessId, request.resource.data.bookingId))
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.lastSessionEventId == eventId
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.lastSessionEventType == request.resource.data.action
-          && getAfter(bookingPath(businessId, request.resource.data.bookingId)).data.sessionStatus == request.resource.data.toStatus
-          && existsAfter(bookingOperationPath(businessId, eventId))
-          && getAfter(bookingOperationPath(businessId, eventId)).data.operationType == 'booking.session'
-          && getAfter(bookingOperationPath(businessId, eventId)).data.actorUid == request.auth.uid
-          && getAfter(bookingOperationPath(businessId, eventId)).data.payloadHash == request.resource.data.payloadHash;
+          && hasMatchingBookingSessionEventDocumentAfter(businessId, eventId, request.resource.data);
 
         allow update, delete: if false;
       }
