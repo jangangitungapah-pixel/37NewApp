@@ -28,6 +28,7 @@ function Invoke-VerificationStage {
 
     $stageExitCode = 0
     $output = @()
+    $LASTEXITCODE = 0
 
     try {
         $output = @(& $Command 2>&1)
