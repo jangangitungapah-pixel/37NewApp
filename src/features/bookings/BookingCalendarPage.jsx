@@ -535,7 +535,6 @@ export function BookingCalendarPage() {
                           )}
                           {cellBookings.map((b) => {
                             const meta = getBookingStatusMeta(b.status);
-              const sessionMeta = getSessionStatusMeta(resolveSessionStatus(b));
                             const sessionMeta = getSessionStatusMeta(resolveSessionStatus(b));
                             return (
                               <button
@@ -642,6 +641,7 @@ export function BookingCalendarPage() {
           ) : (
             mobileDayBookings.map((b) => {
               const meta = getBookingStatusMeta(b.status);
+              const sessionMeta = getSessionStatusMeta(resolveSessionStatus(b));
               return (
                 <button
                   key={b.bookingId}
