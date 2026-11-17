@@ -18,6 +18,7 @@ import {
 import {
   BOOKING_STATUS,
   ROLES,
+  SESSION_STATUS,
   SETTING_IDS,
   STUDIO_STATUS,
 } from '../../domain/enums/roles.js';
@@ -53,7 +54,8 @@ export function BookingCalendarPage() {
   const [viewMode, setViewMode] = useState('week'); // 'week' | 'day'
   const [anchorDateKey, setAnchorDateKey] = useState(todayKey);
   const [selectedStudioFilter, setSelectedStudioFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('active_all'); // 'active_all' | 'all' | specific status
+  const [statusFilter, setStatusFilter] = useState('active_all'); // Booking Status filter
+  const [sessionStatusFilter, setSessionStatusFilter] = useState('all'); // Session Status filter
 
   const [createPrefill, setCreatePrefill] = useState(null); // { studioId, dateKey, startTime } | null
   const [selectedBookingId, setSelectedBookingId] = useState(null);
@@ -199,16 +201,21 @@ export function BookingCalendarPage() {
   );
 
   const filteredBookings = useMemo(() => {
-    return rawBookings.filter((b) => {
-      if (statusFilter === 'active_all') {
-        return ![BOOKING_STATUS.CANCELLED, BOOKING_STATUS.NO_SHOW, BOOKING_STATUS.REJECTED].includes(b.status);
-      }
-      if (statusFilter === 'all') {
-        return true;
-      }
-      return b.status === statusFilter;
+    return rawBookings.filter((booking) => {
+      const matchesBookingStatus = statusFilter === 'active_all'
+        ? ![
+            BOOKING_STATUS.CANCELLED,
+            BOOKING_STATUS.NO_SHOW,
+            BOOKING_STATUS.REJECTED,
+          ].includes(booking.status)
+        : statusFilter === 'all' || booking.status === statusFilter;
+
+      const matchesSessionStatus = sessionStatusFilter === 'all'
+        || resolveSessionStatus(booking) === sessionStatusFilter;
+
+      return matchesBookingStatus && matchesSessionStatus;
     });
-  }, [rawBookings, statusFilter]);
+  }, [rawBookings, statusFilter, sessionStatusFilter]);
 
   // Operating hours rows covering business/focused studio hours
   const scheduleHours = useMemo(() => {
@@ -472,6 +479,21 @@ export function BookingCalendarPage() {
                 { value: BOOKING_STATUS.REJECTED, label: 'Ditolak' },
                 { value: BOOKING_STATUS.CANCELLED, label: 'Dibatalkan' },
                 { value: BOOKING_STATUS.NO_SHOW, label: 'No-Show' },
+              ]}
+            />
+            <SelectField
+              aria-label="Filter status sesi"
+              className="min-w-48"
+              value={sessionStatusFilter}
+              onValueChange={setSessionStatusFilter}
+              options={[
+                { value: 'all', label: 'Semua Status Sesi' },
+                { value: SESSION_STATUS.PENDING, label: 'Menunggu Konfirmasi' },
+                { value: SESSION_STATUS.UPCOMING, label: 'Menunggu Sesi' },
+                { value: SESSION_STATUS.IN_PROGRESS, label: 'Sesi Berjalan' },
+                { value: SESSION_STATUS.COMPLETED, label: 'Sesi Selesai' },
+                { value: SESSION_STATUS.NO_SHOW, label: 'No-Show' },
+                { value: SESSION_STATUS.CANCELLED, label: 'Sesi Dibatalkan' },
               ]}
             />
           </div>
