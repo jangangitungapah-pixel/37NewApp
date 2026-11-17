@@ -599,7 +599,7 @@ export function CreateBookingModal({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ fontSize: '14px' }}>
                       Ringkasan Slot & Tarif ({previewQuote.slotPlan.startTime}–
-                      {previewQuote.slotPlan.endTime} WIB)
+                      {previewQuote.slotPlan.endTime} ({tz}))
                     </strong>
                     <span className="badge badge-info">
                       <Lock size={12} aria-hidden="true" />
