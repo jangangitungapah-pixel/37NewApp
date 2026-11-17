@@ -60,7 +60,7 @@ function makeBooking(overrides = {}) {
 function renderModal(booking, overrides = {}) {
   const onClose = vi.fn();
   const onMutated = vi.fn();
-  render(
+  const view = render(
     <BookingDetailModal
       booking={booking}
       member={{
@@ -82,7 +82,7 @@ function renderModal(booking, overrides = {}) {
       {...overrides}
     />,
   );
-  return { onClose, onMutated };
+  return { onClose, onMutated, unmount: view.unmount };
 }
 
 describe('BookingDetailModal session actions', () => {
@@ -99,9 +99,10 @@ describe('BookingDetailModal session actions', () => {
     const legacyBooking = makeBooking();
     delete legacyBooking.sessionStatus;
 
-    renderModal(legacyBooking);
+    const firstView = renderModal(legacyBooking);
     expect(screen.getByRole('button', { name: 'Selesaikan Sesi' })).toBeInTheDocument();
     expect(screen.queryByText(/waktu mulai aktual tidak pernah direkam/i)).not.toBeInTheDocument();
+    firstView.unmount();
 
     const withoutStart = makeBooking({ actualStartAt: null });
     delete withoutStart.sessionStatus;
