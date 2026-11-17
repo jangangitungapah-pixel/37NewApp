@@ -5,7 +5,8 @@
 - **Repository**: `jangangitungapah-pixel/37NewApp`
 - **Branch**: `feature/phase-10-booking-session-lifecycle`
 - **PR**: [#1 — fix(bookings): reduce Firestore Rules evaluation cost](https://github.com/jangangitungapah-pixel/37NewApp/pull/1)
-- **Implementation commit**: `567d5946e3aa849db3ddea2a2d4475bfef1662d3` (see following closeout handoff for the subsequent checkpoint commit)
+- **Implementation commit**: `567d5946e3aa849db3ddea2a2d4475bfef1662d3`
+- **Checkpoint and handoff initially committed**: `23924e48c693089659dce1bb8efc5fe87b273ea7`
 - **PR state at implementation review**: OPEN, DRAFT, NOT MERGED
 
 ---
@@ -43,7 +44,7 @@ New lifecycle sessions retain the existing contract: check-in/start/No-Show cont
 
 A Rules regression test constructs a legacy record, performs completion through the atomic test transaction, checks that the actual start is preserved, verifies event status transition and confirms that the booking's slot locks remain active.
 
-## 3. Files changed in the implementation commit
+## 3. Files changed for the Phase 11 implementation
 
 - `firestore.rules` — narrowly allow verified legacy `IN_PROGRESS` completion.
 - `tests/rules/phase03.rules.test.js` — legacy completion regression case and legacy session-status derivation in the test helper.
@@ -85,7 +86,7 @@ The Phase 10 baseline log is not evidence that the Phase 11 changes have passed.
 2. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\verify-phase10-booking-rules.ps1`.
 3. Upload the timestamped log under `logs\phase11-verification-*.txt`.
 4. Review every stage, test count, stdout/stderr and process exit code. Investigate failures; classify expected negative-assertion Rules denials in context without dismissing real failures.
-5. Correct the PR description so it reflects the real Phase 10 baseline and explicitly states that Phase 11 local verification is pending. Keep PR OPEN and DRAFT.
-6. Once verification is reviewed, update this checkpoint with actual results and finalize the Phase 11 closeout.
+5. The PR description has been updated to reflect the prior Phase 10 baseline and the still-pending Phase 11 local verification. After the log is reviewed, update it again with actual Phase 11 results while keeping the PR OPEN and DRAFT.
+6. Update this checkpoint with actual results after verification is reviewed, then finalize the Phase 11 closeout.
 
 **Phase 11 is not complete at this checkpoint. Do not begin Phase 12.**
