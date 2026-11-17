@@ -129,66 +129,48 @@ service cloud.firestore {
         && eventData.actorUid == request.auth.uid
         && eventData.actorRole == memberData.role;
     }
-    function hasMatchingSlotReservationAfter(businessId, bookingId, studioId, slotId, operationTypes) {
+    // The booking write is the authorization boundary for slot writes.
+    // Its rule already validates membership/studio scope and the operation marker.
+    // Requiring the booking to change in this same transaction avoids repeating
+    // marker lookups for every slot in a multi-slot reservation.
+    function hasMatchingSlotReservationAfter(businessId, bookingId, slotId, slotData, operationTypes) {
       let targetBooking = bookingPath(businessId, bookingId);
       let bookingExists = existsAfter(targetBooking);
       let bookingData = bookingExists ? getAfter(targetBooking).data : {};
-      let operationId = bookingData.get('lastOperationId', null);
-      let operationPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
-      let operationExists = operationId is string && existsAfter(operationPath);
-      let operationData = operationExists ? getAfter(operationPath).data : {};
-      let memberData = currentMember(businessId);
       return bookingExists
         && bookingId is string
-        && bookingData.bookingId == bookingId
-        && bookingData.businessId == businessId
-        && bookingData.studioId == studioId
+        && bookingData.studioId == slotData.studioId
+        && bookingData.dateKey == slotData.dateKey
         && bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
         && bookingData.slotIds is list
         && bookingData.slotIds.hasAny([slotId])
-        && operationExists
-        && operationData.operationId == operationId
-        && operationData.bookingId == bookingId
-        && operationData.studioId == studioId
-        && operationData.operationType in operationTypes
-        && operationData.actorUid == request.auth.uid
-        && operationData.actorRole == memberData.role
-        && operationData.payloadHash == bookingData.lastOperationPayloadHash;
-    }
-    function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId) {
+        && bookingData.lastOperationType in operationTypes
+        && bookingData.updatedBy == request.auth.uid
+        && bookingData.updatedAt == request.time;
+    }    function hasMatchingSlotReleaseAfter(businessId, bookingId, studioId, slotId, slotData) {
       let targetBooking = bookingPath(businessId, bookingId);
       let bookingExists = existsAfter(targetBooking);
       let bookingData = bookingExists ? getAfter(targetBooking).data : {};
-      let operationId = bookingData.get('lastOperationId', null);
-      let operationPath = bookingOperationPath(businessId, operationId is string ? operationId : '__invalid__');
-      let operationExists = operationId is string && existsAfter(operationPath);
-      let operationData = operationExists ? getAfter(operationPath).data : {};
-      let memberData = currentMember(businessId);
       return bookingExists
         && bookingId is string
-        && bookingData.bookingId == bookingId
-        && bookingData.businessId == businessId
         && bookingData.studioId == studioId
-        && operationExists
-        && operationData.bookingId == bookingId
-        && operationData.studioId == studioId
-        && operationData.actorUid == request.auth.uid
-        && operationData.actorRole == memberData.role
-        && operationData.payloadHash == bookingData.lastOperationPayloadHash
+        && bookingData.updatedBy == request.auth.uid
+        && bookingData.updatedAt == request.time
+        && bookingData.slotIds is list
         && (
           (
             bookingData.status in ['CANCELLED', 'REJECTED', 'NO_SHOW']
-            && operationData.operationType == 'booking.session'
+            && bookingData.dateKey == slotData.dateKey
+            && bookingData.slotIds.hasAny([slotId])
+            && bookingData.lastOperationType == 'booking.session'
           )
           || (
             bookingData.status in ['PENDING_CONFIRMATION', 'CONFIRMED']
-            && bookingData.slotIds is list
             && !bookingData.slotIds.hasAny([slotId])
-            && operationData.operationType == 'booking.reschedule'
+            && bookingData.lastOperationType == 'booking.reschedule'
           )
         );
     }
-
 
     function hasMatchingBookingOperationDocumentAfter(businessId, operationId, data) {
       let targetBooking = bookingPath(businessId, data.bookingId);
@@ -810,27 +792,16 @@ service cloud.firestore {
         ])
         && data.slotId == slotId
         && data.businessId == businessId
-        && data.studioId is string && data.studioId.size() >= 1
-        && data.dateKey is string && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && data.bucketIndex is int && data.bucketIndex >= 0 && data.bucketIndex <= 95
-        && (
-          (data.bucketIndex < 10 && slotId == data.studioId + '__' + data.dateKey + '__0' + string(data.bucketIndex))
-          || (data.bucketIndex >= 10 && slotId == data.studioId + '__' + data.dateKey + '__' + string(data.bucketIndex))
-        )
-        && data.slotTime is string && data.slotTime.matches('^([01][0-9]|2[0-3]):(00|15|30|45)$')
+        && data.bucketIndex is int
+        && data.bucketIndex >= 0
+        && data.bucketIndex <= 95
+        && slotId == data.studioId + '__' + data.dateKey + '__' + (data.bucketIndex < 10 ? '0' + string(data.bucketIndex) : string(data.bucketIndex))
+        && data.slotTime is string
         && data.kind in ['session', 'buffer']
-        && data.status in ['active', 'released']
-        && (
-          (data.status == 'active' && data.bookingId is string && data.bookingId.size() >= 1)
-          || (data.status == 'released' && data.bookingId == null)
-        )
         && data.slotStartAt is timestamp
         && data.slotEndAt is timestamp
-        && data.slotEndAt > data.slotStartAt
-        && data.reservedBy is string && data.reservedBy.size() >= 1
-        && data.schemaVersion is int && data.schemaVersion >= 1;
+        && data.slotEndAt > data.slotStartAt;
     }
-
     function isValidActivityLogData(data, businessId, eventId) {
       return data.keys().hasOnly([
           'eventId', 'businessId', 'studioId', 'eventType', 'entityType', 'entityId',
@@ -1330,17 +1301,15 @@ service cloud.firestore {
             && resource.data.studioId in currentMember(businessId).assignedStudioIds
           );
 
-        allow create: if canOperateStudioBooking(businessId, request.resource.data.studioId)
-          && isValidBookingSlotData(request.resource.data, businessId, slotId)
+        allow create: if isValidBookingSlotData(request.resource.data, businessId, slotId)
           && request.resource.data.status == 'active'
           && request.resource.data.reservedBy == request.auth.uid
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.reservedAt == request.time
           && request.resource.data.updatedAt == request.time
-          && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, request.resource.data.studioId, slotId, ['booking.create', 'booking.reschedule']);
+          && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, slotId, request.resource.data, ['booking.create', 'booking.reschedule']);
 
-        allow update: if canOperateStudioBooking(businessId, resource.data.studioId)
-          && isValidBookingSlotData(request.resource.data, businessId, slotId)
+        allow update: if isValidBookingSlotData(request.resource.data, businessId, slotId)
           && request.resource.data.slotId == resource.data.slotId
           && request.resource.data.businessId == resource.data.businessId
           && request.resource.data.studioId == resource.data.studioId
@@ -1355,7 +1324,7 @@ service cloud.firestore {
               && request.resource.data.bookingId is string
               && request.resource.data.reservedBy == request.auth.uid
               && request.resource.data.reservedAt == request.time
-              && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, request.resource.data.studioId, slotId, ['booking.create', 'booking.reschedule'])
+              && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, slotId, request.resource.data, ['booking.create', 'booking.reschedule'])
             )
             || (
               resource.data.status == 'active'
@@ -1363,14 +1332,14 @@ service cloud.firestore {
               && resource.data.bookingId == request.resource.data.bookingId
               && request.resource.data.reservedBy == resource.data.reservedBy
               && request.resource.data.reservedAt == resource.data.reservedAt
-              && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, request.resource.data.studioId, slotId, ['booking.reschedule'])
+              && hasMatchingSlotReservationAfter(businessId, request.resource.data.bookingId, slotId, request.resource.data, ['booking.reschedule'])
             )
             || (
               resource.data.status == 'active'
               && request.resource.data.status == 'released'
               && request.resource.data.bookingId == null
               && request.resource.data.releasedAt == request.time
-              && hasMatchingSlotReleaseAfter(businessId, resource.data.bookingId, resource.data.studioId, slotId)
+              && hasMatchingSlotReleaseAfter(businessId, resource.data.bookingId, resource.data.studioId, slotId, resource.data)
             )
           );
 
