@@ -1,0 +1,161 @@
+HANDOFF — 37NewApp / 37MusicStudio
+NEXT SESSION: ROADMAP RECONCILIATION & NEXT-PHASE DISCOVERY
+STATUS: PHASE 11 CLOSED; NO NEXT IMPLEMENTATION PHASE AUTHORIZED
+
+============================================================
+1. PURPOSE OF THE NEXT SESSION
+============================================================
+
+Phase 11 (Booking & Session End-to-End Integration Assurance) is complete.
+The next session must reconcile the project's roadmap and identify the next
+approved scope. Do NOT assume that Phase 12 already has a defined scope.
+Do NOT begin implementation until the next phase and its acceptance criteria
+are explicitly established with the user.
+
+The repository's existing docs/architecture/rebuild-plan-and-risks.md
+currently defines phases 00 through 08. Current branch history and handoff
+documentation contain work beyond that original matrix (including Phase 10
+and Phase 11). First reconcile this discrepancy and establish a coherent,
+current phase sequence.
+
+============================================================
+2. REPOSITORY BASELINE
+============================================================
+
+Repository:
+https://github.com/jangangitungapah-pixel/37NewApp
+
+Local path:
+C:\Users\hazel\source\repos\37NewApp
+
+Branch:
+feature/phase-10-booking-session-lifecycle
+
+Verified Phase 11 code commit:
+1f504d70e1fc8ae94daef9f800e352bd23525abb
+
+Phase 11 checkpoint is updated at:
+docs/checkpoints/phase-11-checkpoint.md
+
+Current Phase 11 closeout:
+- User-run PowerShell verification log reviewed.
+- Verification wrapper reports OVERALL_RESULT = PASS.
+- ESLint PASS.
+- Targeted booking/session unit tests: 4 files, 31/31 PASS.
+- Firestore Rules Emulator: 7 files, 24/24 PASS.
+- Production build PASS.
+- All eight wrapper stages exit code 0.
+
+Local evidence path (user machine):
+logs\phase11-verification-20261117-184551.txt
+
+PR:
+https://github.com/jangangitungapah-pixel/37NewApp/pull/1
+
+PR #1 must remain:
+- OPEN
+- DRAFT
+- NOT MERGED
+
+The user has not authorized a PR merge or production deployment.
+Do not merge or deploy.
+
+============================================================
+3. PHASE 11 FINDING AND IMPLEMENTATION
+============================================================
+
+Phase 11 fixed a Rules-boundary mismatch for legacy session completion:
+- Legacy booking has status = IN_PROGRESS.
+- sessionStatus may be absent.
+- A real actualStartAt timestamp must exist.
+- The UI/domain compatibility path exposes Complete only when actualStartAt
+  exists.
+- Firestore Rules previously required oldData.status = CONFIRMED for complete.
+
+The Rules now permit only the legacy action == complete with
+oldData.status == IN_PROGRESS, while retaining active-member/role/studio
+authorization, operation marker, append-only session event, actual start/end
+timestamp, duration and final-state checks.
+
+The syntax correction commit removed one extra closing parenthesis from
+isValidBookingSessionUpdate(). The emulator suite then compiled and passed.
+
+Key regression:
+tests/rules/phase03.rules.test.js
+"completes a legacy IN_PROGRESS booking only when its actual start timestamp
+exists, preserving held slots"
+
+Other focused tests:
+- tests/unit/BookingDetailModal.test.jsx
+- tests/unit/bookingSessionUseCases.test.js
+
+============================================================
+4. IMPORTANT RESIDUAL OBSERVATION
+============================================================
+
+The Phase 11 Rules Emulator run passed all 24 tests. During some deliberate
+negative assertions (assertFails) in booking/32-slot, session and settlement
+test groups, emulator stderr included:
+"Unable to evaluate the expression as the maximum of 1000 expressions to
+evaluate has been reached."
+
+The corresponding negative assertions passed. Valid 32-slot reservation,
+valid session transitions and valid Owner settlement assertions also passed.
+The log does NOT show a successful authorized path failing from this limit.
+
+However, the log does not prove that every negative probe reached its intended
+authorization predicate instead of being denied after exhausting the Rules
+expression-evaluation budget. Treat this as a real Rules efficiency /
+diagnostic follow-up, not clean/no-op output. Do not change security semantics
+or weaken authorization to silence the message.
+
+The Vite build also emitted non-fatal Rollup warnings about @__PURE__ comment
+placement in Zod v4 dependency files; the build passed.
+
+============================================================
+5. ARCHITECTURE AND SAFETY CONSTRAINTS
+============================================================
+
+- Firebase Authentication + Cloud Firestore + Firebase Hosting only.
+- Firebase Spark plan only.
+- No Cloud Functions, Cloud Run, Cloudflare Workers, Firebase Storage,
+  Extensions, Blaze, Cloud Billing, payment methods or paid infrastructure.
+- Cloudinary is allowed only for Gallery image binaries; Gallery metadata
+  remains in Firestore.
+- No production writes or deployment without separate explicit approval.
+- Do not merge PRs without explicit user permission.
+
+ADR-0010 Option A residual risk remains accepted:
+An otherwise-authorized Owner/Operator may perform direct Firestore writes
+outside the official repository and create a booking without the complete
+slot set. Never claim booking-slot integrity is server-authoritative or
+tamper-proof against authorized direct writes.
+
+============================================================
+6. NEXT SESSION TASK BOUNDARY
+============================================================
+
+The next session should:
+1. Inspect latest PR status, branch HEAD and repository docs before relying on
+   any SHA or state in this handoff.
+2. Read the current architecture plan, ADRs, Phase 10/11 checkpoints and
+   existing handoffs.
+3. Reconcile the original phase matrix (00–08) with the later work already
+   completed.
+4. Review whether the Rules expression-budget observation should be prioritized
+   as a focused hardening phase or tracked separately.
+5. Produce a proposed next-phase scope, measurable acceptance criteria,
+   risk boundaries, implementation sequence and verification plan.
+6. Create or update roadmap/checkpoint/handoff documentation only within the
+   discovery scope authorized for that session.
+
+Do not implement application features, alter Rules, merge PR #1, or deploy
+during the roadmap-reconciliation session unless the user explicitly approves
+a separately defined implementation phase.
+
+ChatGPT owns implementation through the connected GitHub tools when a future
+implementation phase is approved. The user runs local PowerShell verification.
+Continue preserving stdout/stderr and per-stage exit codes in a timestamped
+logs/*.txt file.
+
+END OF HANDOFF
