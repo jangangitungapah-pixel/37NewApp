@@ -639,6 +639,73 @@ describe('Phase 10 booking/session Firestore Rules & atomic transactions', () =>
     }));
   });
 
+  it('cancels an already-started separate session without fabricating an end timestamp and releases owned slots', async () => {
+    const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
+    const plan = computeBookingSlotPlan({
+      studioId: 'studio-a',
+      dateKey: DATE_KEY,
+      startTime: '17:00',
+      durationMinutes: 60,
+      operatingHours: { openTime: '10:00', closeTime: '22:00' },
+      slotGranularityMinutes: 15,
+    });
+
+    await assertSucceeds(runTransaction(ownerDb, async (tx) => {
+      const bookingRef = doc(ownerDb, 'businesses', BIZ_ID, 'bookings', 'bk-cancel-after-start');
+      await tx.get(bookingRef);
+      const refs = plan.allSlots.map((slot) => doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slot.slotId));
+      const snapshots = await Promise.all(refs.map((ref) => tx.get(ref)));
+      stageBookingCreate(tx, ownerDb, {
+        bookingId: 'bk-cancel-after-start',
+        studioId: 'studio-a',
+        actorUid: OWNER_UID,
+        slotPlan: plan,
+        slotSnapshots: snapshots,
+      });
+    }));
+
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-cancel-after-start',
+      actorUid: OWNER_UID,
+      action: 'start',
+    }));
+    await assertSucceeds(runSessionTransition(ownerDb, {
+      bookingId: 'bk-cancel-after-start',
+      actorUid: OWNER_UID,
+      action: 'cancel',
+      reason: 'Operasional darurat',
+    }));
+
+    const booking = (await getDoc(doc(
+      ownerDb,
+      'businesses',
+      BIZ_ID,
+      'bookings',
+      'bk-cancel-after-start',
+    ))).data();
+    expect(booking.status).toBe('CANCELLED');
+    expect(booking.sessionStatus).toBe('CANCELLED');
+    expect(booking.actualStartAt).toBeDefined();
+    expect(booking.actualEndAt ?? null).toBeNull();
+
+    const event = await getDoc(doc(
+      ownerDb,
+      'businesses',
+      BIZ_ID,
+      'bookingSessionEvents',
+      'booking_session__cancel__bk-cancel-after-start',
+    ));
+    expect(event.exists()).toBe(true);
+    expect(event.data().fromStatus).toBe('IN_PROGRESS');
+    expect(event.data().toStatus).toBe('CANCELLED');
+
+    for (const slotId of plan.slotIds) {
+      const slot = (await getDoc(doc(ownerDb, 'businesses', BIZ_ID, 'bookingSlots', slotId))).data();
+      expect(slot.status).toBe('released');
+      expect(slot.bookingId).toBeNull();
+    }
+  });
+
   it('enforces No-Show grace and releases the complete owned slot set atomically', async () => {
     const ownerDb = testEnv.authenticatedContext(OWNER_UID).firestore();
     const futurePlan = computeBookingSlotPlan({
